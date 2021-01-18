@@ -1,9 +1,9 @@
 package cn.zenliu.java.rs.rpc.rpc.server;
 
+import cn.zenliu.java.rs.rpc.api.Config;
 import cn.zenliu.java.rs.rpc.core.Rpc;
 import cn.zenliu.java.rs.rpc.rpc.common.TestService;
 import cn.zenliu.java.rs.rpc.rpc.common.TestServiceImpl;
-import io.rsocket.transport.netty.server.TcpServerTransport;
 import lombok.val;
 
 /**
@@ -19,7 +19,7 @@ public class ServerApp {
             val rpcService = Rpc.newInstance("server", false);
             rpcService.setDebug(true);
             rpcService.registerService(new TestServiceImpl(), TestService.class, null);
-            rpcService.startServer("aServer", TcpServerTransport.create(7000));
+            rpcService.startServer("aServer", Config.Server.builder().port(7000).build());
             Runtime.getRuntime().addShutdownHook(new Thread(rpcService::release));
         }).start();
     }

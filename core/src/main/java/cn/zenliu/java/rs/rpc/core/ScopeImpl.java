@@ -1,5 +1,6 @@
 package cn.zenliu.java.rs.rpc.core;
 
+import cn.zenliu.java.rs.rpc.api.Config;
 import cn.zenliu.java.rs.rpc.api.Result;
 import cn.zenliu.java.rs.rpc.api.Scope;
 import cn.zenliu.java.rs.rpc.core.ProxyUtil.ClientCreator;
@@ -13,6 +14,9 @@ import io.rsocket.core.RSocketServer;
 import io.rsocket.frame.decoder.PayloadDecoder;
 import io.rsocket.transport.ClientTransport;
 import io.rsocket.transport.ServerTransport;
+import io.rsocket.transport.netty.client.TcpClientTransport;
+import io.rsocket.transport.netty.client.WebsocketClientTransport;
+import io.rsocket.transport.netty.server.TcpServerTransport;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
@@ -143,41 +147,16 @@ public final class ScopeImpl implements Scope, Serializable {
         return newIdx;
     }
 
-    /**
-     * add or update Meta
-     *
-     * @param service    the remote meta
-     * @param oldService the old meta
-     */
-    void addOrUpdateRemote(Service service, Service oldService) {
-        if (oldService == null && service.name.equals(NONE_META_NAME)) {
-            if (debug.get()) {
-                log.warn("a new connection found {}, sync meta :{}", service, localServices);
-            }
-            remoteRegistry.put(service.idx, service);
-            service.socket.metadataPush(servMetaBuilder.get()).subscribe();
-            return;
+    static Retry buildClientRetry(Config.ClientConfig config) {
+        final Config.Retry retry = config.getRetry();
+        if (retry instanceof Config.Retry.FixedDelay) {
+            return Retry.fixedDelay(((Config.Retry.FixedDelay) retry).getMaxAttempts(), ((Config.Retry.FixedDelay) retry).getFixedDelay());
+        } else if (retry instanceof Config.Retry.Backoff) {
+            return Retry.backoff(((Config.Retry.Backoff) retry).getMaxAttempts(), ((Config.Retry.Backoff) retry).getMinDelay());
+        } else if (retry instanceof Config.Retry.Max) {
+            return Retry.max(((Config.Retry.Max) retry).getMaxAttempts());
         }
-        final int remoteIdx = oldService.idx >= 0 ? oldService.idx : confirmRemote(service.name);
-        if (oldService.getName().equals(NONE_META_NAME)) remoteRegistry.remove(oldService.idx);
-        if (remoteRegistry.containsKey(remoteIdx)) {
-            service.setIdx(remoteIdx);
-            final Service olderService = remoteRegistry.get(remoteIdx);
-            if (service.idx == -1) service.setIdx(remoteIdx);
-            if (service.socket == null) service.setSocket(olderService.socket);
-            if (service.weight == 0) service.setWeight(Math.max(olderService.weight, 1));
-            log.debug("update meta for remote {}[{}] ", service, remoteIdx);
-            remoteRegistry.put(remoteIdx, service);
-            log.debug("remove and update meta from {}  to {}", oldService, service);
-            updateRemoteService(service, olderService);
-        } else {
-            log.debug("new meta for remote {}[{}] ", service, remoteIdx);
-            if (service.idx == -1) service.setIdx(remoteIdx);
-            if (service.weight == 0) service.setWeight(1);
-            remoteRegistry.put(remoteIdx, service);
-            updateRemoteService(service, oldService);
-            // meta.socket.metadataPush(metaBuilder.get()).subscribe();
-        }
+        return Retry.indefinitely();
     }
 
     /**
@@ -289,27 +268,17 @@ public final class ScopeImpl implements Scope, Serializable {
 
     }
 
-    Optional<Service> routing(String domain) {
-        final String service = domain.substring(0, domain.indexOf('#'));
-        if (remoteServices.containsKey(service)) {
-            final TreeSet<Service> socket = remoteServices.get(service);
-            if (socket.isEmpty()) {
-                remoteServices.remove(service + "?");
-                log.debug("not exists service for {} on {} with {}", domain, name, service);
-                return Optional.empty();
-            }
-            return Optional.of(socket.first());
-        } else if (remoteServices.containsKey(service + "?")) {
-            final TreeSet<Service> socket = remoteServices.get(service + "?");
-            if (socket.isEmpty()) {
-                remoteServices.remove(service + "?");
-                log.debug("not exists routeing service for {} on {} with {}", domain, name, service);
-                return Optional.empty();
-            }
-            return Optional.of(socket.first());
-        } else {
-            return Optional.empty();
+    static ClientTransport buildClient(Config.ClientConfig config) {
+        switch (config.getMode()) {
+            case 0:
+                return TcpClientTransport.create(
+                    Objects.requireNonNull(config.getHost(), "must with HOST defined for client mode 0"),
+                    Objects.requireNonNull(config.getPort(), "must with PORT defined for client mode 0"));
+            case 1:
+                return WebsocketClientTransport.create(
+                    Objects.requireNonNull(config.getUri(), "must with URI defined for client mode 1"));
         }
+        throw new IllegalStateException("not supported transport mode:" + config.getMode());
     }
 
     void forgetRouting(String domain, Object[] args) {
@@ -392,16 +361,98 @@ public final class ScopeImpl implements Scope, Serializable {
         handler.clear();
     }
 
+    static ServerTransport<? extends Closeable> buildServer(Config.ServerConfig config) {
+        switch (config.getMode()) {
+            case 0:
+                return config.getBindAddress() != null ?
+                    TcpServerTransport.create(config.getBindAddress(),
+                        Objects.requireNonNull(config.getPort(), "must with PORT defined for server mode 0"))
+                    : TcpServerTransport.create(Objects.requireNonNull(config.getPort(), "must with PORT defined for server mode 0"));
+            //TODO how to isolate HTTPServer?
+
+
+        }
+        throw new IllegalStateException("not supported transport mode:" + config.getMode());
+    }
+
+    /**
+     * add or update Meta
+     *
+     * @param service    the remote meta
+     * @param oldService the old meta
+     */
+    void addOrUpdateRemote(Service service, Service oldService) {
+        if (oldService == null && service.name.equals(NONE_META_NAME)) {
+            if (debug.get()) {
+                log.warn("a new connection found {}, sync serv meta :{}", service, localServices);
+            }
+            remoteRegistry.put(service.idx, service);
+            service.socket.metadataPush(servMetaBuilder.get()).subscribe();
+            return;
+        }
+        final int remoteIdx = oldService.idx >= 0 ? oldService.idx : confirmRemote(service.name);
+        if (oldService.getName().equals(NONE_META_NAME)) remoteRegistry.remove(oldService.idx);
+        if (remoteRegistry.containsKey(remoteIdx)) {
+            service.setIdx(remoteIdx);
+            final Service olderService = remoteRegistry.get(remoteIdx);
+            if (service.idx == -1) service.setIdx(remoteIdx);
+            if (service.socket == null) service.setSocket(olderService.socket);
+            if (service.weight == 0) service.setWeight(Math.max(olderService.weight, 1));
+            log.debug("update meta for remote {}[{}] ", service, remoteIdx);
+            remoteRegistry.put(remoteIdx, service);
+            log.debug("remove and update meta from {}  to {}", oldService, service);
+            updateRemoteService(service, olderService);
+        } else {
+            log.debug("new meta for remote {}[{}] ", service, remoteIdx);
+            if (service.idx == -1) service.setIdx(remoteIdx);
+            if (service.weight == 0) service.setWeight(1);
+            remoteRegistry.put(remoteIdx, service);
+            updateRemoteService(service, oldService);
+            // meta.socket.metadataPush(metaBuilder.get()).subscribe();
+        }
+    }
+
+    /**
+     * routing is use for Delegator service
+     */
+    Optional<Service> routing(String domain) {
+        final String service = domain.substring(0, domain.indexOf('#'));
+        if (remoteServices.containsKey(service)) {
+            final TreeSet<Service> socket = remoteServices.get(service);
+            if (socket.isEmpty()) {
+                remoteServices.remove(service + "?");
+                log.debug("not exists service for {} on {} with {}", domain, name, service);
+                return Optional.empty();
+            }
+            return Optional.of(socket.first());
+        } else if (remoteServices.containsKey(service + "?")) {
+            final TreeSet<Service> socket = remoteServices.get(service + "?");
+            if (socket.isEmpty()) {
+                remoteServices.remove(service + "?");
+                log.debug("not exists routeing service for {} on {} with {}", domain, name, service);
+                return Optional.empty();
+            }
+            return Optional.of(socket.first());
+        } else {
+            return Optional.empty();
+        }
+    }
+
     /**
      * {@inheritDoc}
      */
     @Override
-    public void startClient(String name, ClientTransport transport) {
+    public void startClient(String name, Config.ClientConfig config) {
         if (localServers.containsKey(name))
             throw new IllegalStateException("a service or client with name is already exists ! name is " + name);
-        RSocketConnector.create()
-            .reconnect(Retry.indefinitely())
-            .payloadDecoder(PayloadDecoder.ZERO_COPY)
+        final RSocketConnector builder = RSocketConnector.create()
+//            .resume(new Resume())
+            .reconnect(buildClientRetry(config))
+            .payloadDecoder(config.getPayloadCodec() == 1 ? PayloadDecoder.DEFAULT : PayloadDecoder.ZERO_COPY)
+            .keepAlive(
+                config.getKeepAliveInterval() == null ? Duration.ofSeconds(20) : config.getKeepAliveInterval(),
+                config.getKeepAliveMaxLifeTime() == null ? Duration.ofSeconds(90) : config.getKeepAliveMaxLifeTime()
+            )
             .acceptor((setup, sending) -> {
                 final Service service = Service.builder()
                     .idx(remoteRegistry.size() + 1)
@@ -413,8 +464,10 @@ public final class ScopeImpl implements Scope, Serializable {
                 addOrUpdateRemote(service, null);
                 return Mono.just(new ServiceRSocket(name, service));
 
-            })
-            .connect(transport)
+            });
+        if (config.getFragment() != null) builder.fragment(config.getFragment());
+        if (config.getMaxInboundPayloadSize() != null) builder.maxInboundPayloadSize(config.getMaxInboundPayloadSize());
+        builder.connect(buildClient(config))
             .subscribe(client -> {
                 if (debug.get()) {
                     log.warn("rpc client [{}] started", name);
@@ -423,17 +476,17 @@ public final class ScopeImpl implements Scope, Serializable {
             });
     }
 
-
     /**
      * {@inheritDoc}
      */
     @Override
-    public void startServer(String name, ServerTransport<? extends Closeable> transport) {
-
+    public void startServer(String name, Config.ServerConfig config) {
         if (localServers.containsKey(name))
             throw new IllegalStateException("a service or client with name is already exists ! name is " + name);
-        RSocketServer.create()
-            .payloadDecoder(PayloadDecoder.ZERO_COPY)
+        final ServerTransport<? extends Closeable> transport = buildServer(config);
+        final RSocketServer builder = RSocketServer.create()
+//            .resume(new Resume())
+            .payloadDecoder(config.getPayloadCodec() == 1 ? PayloadDecoder.DEFAULT : PayloadDecoder.ZERO_COPY)
             .acceptor((setup, sending) -> {
                 final Service service = Service.builder()
                     .idx(remoteRegistry.size() + 1)
@@ -446,16 +499,16 @@ public final class ScopeImpl implements Scope, Serializable {
                 addOrUpdateRemote(service, null);
                 return Mono.just(new ServiceRSocket(name, service));
 
-            })
-            .bind(transport)
+            });
+        if (config.getFragment() != null) builder.fragment(config.getFragment());
+        if (config.getMaxInboundPayloadSize() != null) builder.maxInboundPayloadSize(config.getMaxInboundPayloadSize());
+        builder.bind(transport)
             .subscribe(server -> {
                 if (debug.get()) {
                     log.warn("server [{}] started on {}", name, transport);
                 }
                 addLocal(server, name);
             });
-
-
     }
 
     /**

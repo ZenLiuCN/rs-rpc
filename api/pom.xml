@@ -16,9 +16,5 @@
             <groupId>org.jooq</groupId>
             <artifactId>jool-java-8</artifactId>
         </dependency>
-        <dependency>
-            <groupId>io.rsocket</groupId>
-            <artifactId>rsocket-core</artifactId>
-        </dependency>
     </dependencies>
 </project>

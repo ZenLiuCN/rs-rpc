@@ -55,8 +55,8 @@ public @interface MBeanEnableRPC {
         })
         public Boolean actDebug(@NotNull String name, @Nullable Boolean debug) {
             final ScopeImpl bean = getBean(name);
-            if (debug != null) bean.debug.set(debug);
-            return bean.debug.get();
+            if (debug != null) bean.getDebug().set(debug);
+            return bean.getDebug().get();
         }
 
         @ManagedOperation(description = "查看或设置Timeout")
@@ -66,29 +66,29 @@ public @interface MBeanEnableRPC {
         })
         public Duration actTimeout(@NotNull String name, @Nullable Duration timeout) {
             final ScopeImpl bean = getBean(name);
-            if (timeout != null) bean.timeout.set(timeout);
-            return bean.timeout.get();
+            if (timeout != null) bean.getTimeout().set(timeout);
+            return bean.getTimeout().get();
         }
 
         @ManagedOperation(description = "查看本地服务端")
         @ManagedOperationParameter(name = "name", description = "scope简化名称")
         public Map<String, Boolean> localServices(@NotNull String name) {
             final ScopeImpl bean = getBean(name);
-            return Seq.seq(bean.localServers).map(t -> t.map2(Disposable::isDisposed)).toMap(Tuple2::v1, Tuple2::v2);
+            return Seq.seq(bean.getLocalServers()).map(t -> t.map2(Disposable::isDisposed)).toMap(Tuple2::v1, Tuple2::v2);
         }
 
         @ManagedOperation(description = "查看本地注册的Service")
         @ManagedOperationParameter(name = "name", description = "scope简化名称")
         public Set<String> localServiceName(@NotNull String name) {
             final ScopeImpl bean = getBean(name);
-            return bean.localServices;
+            return bean.getLocalServices();
         }
 
         @ManagedOperation(description = "查看远程服务")
         @ManagedOperationParameter(name = "name", description = "scope简化名称")
         public Map<Integer, Map<String, ?>> remotesRegistry(@NotNull String name) {
             final ScopeImpl bean = getBean(name);
-            return Seq.seq(bean.remoteRegistry).map(t -> t.map2(Service::dumpMeta))
+            return Seq.seq(bean.getRemoteRegistry()).map(t -> t.map2(Service::dumpMeta))
                 .toMap(Tuple2::v1, Tuple2::v2);
         }
 
@@ -96,7 +96,7 @@ public @interface MBeanEnableRPC {
         @ManagedOperationParameter(name = "name", description = "scope简化名称")
         public Map<String, List<Map<String, Object>>> remotes(@NotNull String name) {
             final ScopeImpl bean = getBean(name);
-            return Seq.seq(bean.remoteServices)
+            return Seq.seq(bean.getRemoteServices())
                 .map(t -> t.map2(x -> Seq.seq(x).map(Service::dumpMeta).toList()))
                 .toMap(Tuple2::v1, Tuple2::v2);
         }

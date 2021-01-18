@@ -1,8 +1,5 @@
 package cn.zenliu.java.rs.rpc.api;
 
-import io.rsocket.Closeable;
-import io.rsocket.transport.ClientTransport;
-import io.rsocket.transport.ServerTransport;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.Unmodifiable;
@@ -44,18 +41,18 @@ public interface Scope {
     /**
      * create a new RSocket Server
      *
-     * @param name      simple server name
-     * @param transport 串串
+     * @param name   simple server name
+     * @param config server configuration
      */
-    void startServer(String name, ServerTransport<? extends Closeable> transport);
+    void startServer(String name, Config.ServerConfig config);
 
     /**
      * create a new RSocket Client
      *
-     * @param name      simple client name
-     * @param transport 传输方法
+     * @param name   simple client name
+     * @param config client configuration
      */
-    void startClient(String name, ClientTransport transport);
+    void startClient(String name, Config.ClientConfig config);
 
     /**
      * 释放方法,关闭所有本地服务和远程链接
