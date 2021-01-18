@@ -1,0 +1,544 @@
+package cn.zenliu.java.rs.rpc.core;
+
+import cn.zenliu.java.rs.rpc.api.Result;
+import cn.zenliu.java.rs.rpc.api.Scope;
+import cn.zenliu.java.rs.rpc.core.ProxyUtil.ClientCreator;
+import cn.zenliu.java.rs.rpc.core.ProxyUtil.ServiceRegister;
+import io.netty.buffer.ByteBufUtil;
+import io.rsocket.Closeable;
+import io.rsocket.Payload;
+import io.rsocket.RSocket;
+import io.rsocket.core.RSocketConnector;
+import io.rsocket.core.RSocketServer;
+import io.rsocket.frame.decoder.PayloadDecoder;
+import io.rsocket.transport.ClientTransport;
+import io.rsocket.transport.ServerTransport;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+import org.jetbrains.annotations.Unmodifiable;
+import org.jooq.lambda.Seq;
+import reactor.core.Disposable;
+import reactor.core.publisher.Mono;
+import reactor.util.retry.Retry;
+
+import java.io.Serializable;
+import java.time.Duration;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
+import java.util.function.Supplier;
+
+import static cn.zenliu.java.rs.rpc.core.ProxyUtil.clientCreatorBuilder;
+import static cn.zenliu.java.rs.rpc.core.ProxyUtil.serviceRegisterBuilder;
+import static cn.zenliu.java.rs.rpc.core.Service.NONE_META_NAME;
+
+
+/**
+ * Scope implement
+ *
+ * @author Zen.Liu
+ * @apiNote
+ * @since 2021-01-16
+ */
+
+@Slf4j
+public final class ScopeImpl implements Scope, Serializable {
+    private static final long serialVersionUID = -7734615300814212060L;
+
+
+    static String LOG_META = "\n META: {}\n SERVICE: {}";
+    static String LOG_META_REQUEST = "\n META:{}\n REQUEST: {}\n SERVICE: {}";
+    @Getter final String name;
+    @Getter final boolean route;
+    transient final Supplier<Payload> servMetaBuilder;
+    transient final ClientCreator clientCreator;
+    @Getter private final AtomicBoolean debug = new AtomicBoolean(false);
+    @Getter private final AtomicReference<Duration> timeout = new AtomicReference<>(Duration.ofSeconds(2));
+    @Getter private final Map<String, Disposable> localServers = new ConcurrentHashMap<>();
+    @Getter private final Set<String> localServices = new HashSet<>();
+    @Getter private final AtomicReference<Set<String>> routes = new AtomicReference<>();
+    @Getter private final Map<String, Function<Object[], Result<Object>>> handler = new ConcurrentHashMap<>();
+    transient final ServiceRegister serviceRegister = serviceRegisterBuilder(localServices, handler);
+    @Getter private final Map<String, TreeSet<Service>> remoteServices = new ConcurrentHashMap<>();
+    @Getter private final Map<Integer, Service> remoteRegistry = new ConcurrentHashMap<>();
+    @Getter private final List<String> remoteNames = new CopyOnWriteArrayList<>();
+
+
+    @Builder
+    public ScopeImpl(String name, boolean route) {
+        this.name = name == null || name.isEmpty() ? UUID.randomUUID().toString() : name;
+        servMetaBuilder = () -> ServMeta.build(name, routes.get());
+        clientCreator = clientCreatorBuilder(name, this::forgetRouting, this::requestRouting);
+        this.route = route;
+        calcRoutes();
+    }
+
+    static String dump(Service service, Payload payload) {
+        return "\n SERVICE: " + service.name + " | SERVICES:" + service.service + "| WEIGHT:" + service.weight + "\n" +
+            " META :\n" + ByteBufUtil.prettyHexDump(payload.sliceMetadata()) +
+            " DATA :\n" + ByteBufUtil.prettyHexDump(payload.sliceData());
+    }
+
+    private void calcRoutes() {
+        Set<String> routes = new HashSet<>(localServices);
+        if (route) routes.addAll(Seq.seq(remoteServices.keySet()).map(x -> x + "?").toSet());
+        this.routes.set(routes);
+    }
+
+    /**
+     * register local server|client
+     *
+     * @param name    local server name
+     * @param service the instance as Disposable
+     */
+    void addLocal(Disposable service, String name) {
+        localServers.put(name, service);
+    }
+
+    /**
+     * process ServiceMeta Request
+     *
+     * @param meta    payload
+     * @param service current Meta
+     */
+    void metaProcess(ServMeta meta, Service service) {
+        final Service newService = service.updateFromMeta(meta);
+        addOrUpdateRemote(newService, service);
+    }
+
+    /**
+     * Sync Meta data
+     */
+    private void syncServMeta() {
+        calcRoutes();
+        if (remoteRegistry.isEmpty()) return;
+        final Payload meta = servMetaBuilder.get();
+        if (debug.get()) log.debug("will sync serv meta {} to remote {}  ", this.routes.get(), remoteRegistry);
+        remoteRegistry.forEach((i, v) -> {
+            if (debug.get()) log.debug(" sync serv meta to remote[{}]: {} ", v, this.routes.get());
+            v.socket.metadataPush(meta);
+        });
+    }
+
+
+    /**
+     * generate index by Remote Name
+     *
+     * @param name Remote Name
+     * @return Index or -1
+     */
+    private int confirmRemote(String name) {
+        if (remoteNames.contains(name)) {
+            log.debug("already exists remote name of {}", name);
+            return remoteNames.indexOf(name);
+        }
+        final int newIdx = remoteNames.size();
+        remoteNames.add(name);
+        return newIdx;
+    }
+
+    /**
+     * add or update Meta
+     *
+     * @param service    the remote meta
+     * @param oldService the old meta
+     */
+    void addOrUpdateRemote(Service service, Service oldService) {
+        if (oldService == null && service.name.equals(NONE_META_NAME)) {
+            if (debug.get()) {
+                log.warn("a new connection found {}, sync meta :{}", service, localServices);
+            }
+            remoteRegistry.put(service.idx, service);
+            service.socket.metadataPush(servMetaBuilder.get()).subscribe();
+            return;
+        }
+        final int remoteIdx = oldService.idx >= 0 ? oldService.idx : confirmRemote(service.name);
+        if (oldService.getName().equals(NONE_META_NAME)) remoteRegistry.remove(oldService.idx);
+        if (remoteRegistry.containsKey(remoteIdx)) {
+            service.setIdx(remoteIdx);
+            final Service olderService = remoteRegistry.get(remoteIdx);
+            if (service.idx == -1) service.setIdx(remoteIdx);
+            if (service.socket == null) service.setSocket(olderService.socket);
+            if (service.weight == 0) service.setWeight(Math.max(olderService.weight, 1));
+            log.debug("update meta for remote {}[{}] ", service, remoteIdx);
+            remoteRegistry.put(remoteIdx, service);
+            log.debug("remove and update meta from {}  to {}", oldService, service);
+            updateRemoteService(service, olderService);
+        } else {
+            log.debug("new meta for remote {}[{}] ", service, remoteIdx);
+            if (service.idx == -1) service.setIdx(remoteIdx);
+            if (service.weight == 0) service.setWeight(1);
+            remoteRegistry.put(remoteIdx, service);
+            updateRemoteService(service, oldService);
+            // meta.socket.metadataPush(metaBuilder.get()).subscribe();
+        }
+    }
+
+    /**
+     * update meta in RemotesRegistry
+     *
+     * @param service new Meta
+     * @param old     old Meta
+     */
+    private void updateRemoteService(Service service, Service old) {
+        for (String serv : service.service) {
+            if (!remoteServices.containsKey(serv)) {
+                remoteServices.put(serv, new TreeSet<>(Service.weightComparator));
+            }
+            remoteServices.get(serv).add(service);
+        }
+        if (old != null) {
+            old.service.forEach(v -> remoteServices.get(v).remove(old));
+        }
+        calcRoutes();
+    }
+
+    /**
+     * Process FireAndForgot
+     *
+     * @param p       payload
+     * @param service meta of remote
+     */
+    void fire(Payload p, Service service) {
+        final Meta meta = Request.parseMeta(p);
+        log.debug("[{}] begin to process FireAndForget:" + LOG_META, name, meta, service);
+        if (handler.containsKey(meta.domain)) {
+            final Request request = Request.parseRequest(p);
+            if (debug.get()) {
+                log.debug("[{}] process FireAndForget:" + LOG_META_REQUEST, name, meta, request, service);
+                long st = System.nanoTime();
+                try {
+                    handler.get(meta.domain).apply(request.arguments);
+                } catch (Exception e) {
+                    log.error("[{}] error to process FireAndForget:" + LOG_META_REQUEST, name, meta, request, service, e);
+                } finally {
+                    long et = System.nanoTime();
+                    log.debug("[{}] process FireAndForget:" + LOG_META_REQUEST + "\n LOCAL_COST: {} μs;", name, meta, request, service, (et - st) / 1000.0);
+                }
+            } else {
+                try {
+                    handler.get(meta.domain).apply(request.arguments);
+                } catch (Exception e) {
+                    log.error("[{}] error to process FireAndForget:" + LOG_META_REQUEST, name, meta, request, service, e);
+                }
+            }
+
+        } else //found routeing services
+            if (remoteServices.containsKey(meta.domain + "?")) {
+                final Service routeNode = remoteServices.get(meta.domain + "?").first();
+                if (debug.get())
+                    log.debug("[{}] routeing FireAndForget:" + LOG_META + "\n NEXT:{}", name, meta, service, routeNode);
+                else
+                    log.debug("[{}] routeing FireAndForget:" + LOG_META + "\n NEXT:{}", name, meta, service.name, routeNode.name);
+                routeNode.socket.fireAndForget(Request.updateMeta(p, meta, name));
+            } else {
+                log.warn("[{}] none registered FireAndForget:" + LOG_META, name, meta, service);
+            }
+    }
+
+    /**
+     * RequestResponse
+     *
+     * @param p       payload
+     * @param service meta of remote
+     * @return response Payload
+     */
+    Mono<Payload> request(Payload p, Service service) {
+        final Meta meta = Request.parseMeta(p);
+        log.debug("[{}] process RequestAndResponse:" + LOG_META, name, meta, service);
+        if (handler.containsKey(meta.domain)) {
+            try {
+                final Request request = Request.parseRequest(p);
+                final Result<Object> result;
+                if (debug.get()) {
+                    log.debug("[{}] process RequestAndResponse:" + LOG_META_REQUEST, name, meta, request, service);
+                    long st = System.nanoTime();
+                    result = handler.get(meta.domain).apply(request.arguments);
+                    long et = System.nanoTime();
+                    log.debug("[{}] process RequestAndResponse:" + LOG_META_REQUEST + "LOCAL_COST: {} μs \nRESPONSE: {}", name, meta, request, service, (et - st) / 1000.0, result);
+                } else result = handler.get(meta.domain).apply(request.arguments);
+                return Mono.just(Response.build(meta, name, result != null ? result : Result.ok(null)));
+            } catch (Exception e) {
+                log.debug("[{}] error on process RequestAndResponse:" + LOG_META, name, meta, service, e);
+                return Mono.just(Response.build(meta, name, Result.error(e)));
+            }
+        } else //do routeing
+            if (remoteServices.containsKey(meta.domain + "?")) {
+                try {
+                    final Service routeNode = remoteServices.get(meta.domain + "?").first();
+                    if (debug.get())
+                        log.debug("[{}] routeing RequestAndResponse:" + LOG_META + "\n NEXT:{}", name, meta, service, routeNode);
+                    else
+                        log.debug("[{}] routeing RequestAndResponse:" + LOG_META + "\n NEXT:{}", name, meta, service.name, routeNode.name);
+                    return routeNode.socket.requestResponse(Request.updateMeta(p, meta, name));
+                } catch (Exception e) {
+                    log.debug("[{}] error on process Routeing RequestAndResponse:" + LOG_META, name, meta, service, e);
+                    return Mono.just(Response.build(meta, name, Result.error(e)));
+                }
+            }
+        {
+            log.debug("[{}] none registered RequestAndResponse:" + LOG_META, name, meta, service);
+            return Mono.just(Response.build(meta, name, Result.error(new IllegalStateException("no such method on " + name))));
+        }
+
+    }
+
+    Optional<Service> routing(String domain) {
+        final String service = domain.substring(0, domain.indexOf('#'));
+        if (remoteServices.containsKey(service)) {
+            final TreeSet<Service> socket = remoteServices.get(service);
+            if (socket.isEmpty()) {
+                remoteServices.remove(service + "?");
+                log.debug("not exists service for {} on {} with {}", domain, name, service);
+                return Optional.empty();
+            }
+            return Optional.of(socket.first());
+        } else if (remoteServices.containsKey(service + "?")) {
+            final TreeSet<Service> socket = remoteServices.get(service + "?");
+            if (socket.isEmpty()) {
+                remoteServices.remove(service + "?");
+                log.debug("not exists routeing service for {} on {} with {}", domain, name, service);
+                return Optional.empty();
+            }
+            return Optional.of(socket.first());
+        } else {
+            return Optional.empty();
+        }
+    }
+
+    void forgetRouting(String domain, Object[] args) {
+        final Optional<Service> sockets = routing(domain);
+        if (!sockets.isPresent()) {
+            throw new IllegalStateException("not exists service for " + domain);
+        }
+        final Service service = sockets.get();
+        service.socket.fireAndForget(Request.build(domain, name, args));
+    }
+
+    Result<Object> requestRouting(String domain, Object[] args) {
+        final Optional<Service> sockets = routing(domain);
+        if (!sockets.isPresent()) {
+            throw new IllegalStateException("not exists service for " + domain);
+        }
+        final Service service = sockets.get();
+        if (debug.get()) {
+            log.debug("[{}] remote call \n DOMAIN: {} \n ARGUMENTS: {} .", name, domain, args);
+            long ts = System.currentTimeMillis();
+            final Payload result = service.socket.requestResponse(Request.build(domain, name, args)).block(timeout.get());
+            log.debug("[{}] remote call \n DOMAIN: {} \n ARGUMENTS: {} \n TOTAL COST {}", name, domain, args, (System.currentTimeMillis() - ts));
+            if (result == null) {
+                log.error("[{}] error to request,got null result. \n DOMAIN:: {} \n ARGUMENTS: {} \n SERVICE {}", name, domain, args, service);
+                return Result.error(new IllegalAccessError("error to call remote service " + service.name + " from " + name));
+            }
+            final Response response = Response.parse(result);
+            log.debug("[{}] remote call \n DOMAIN: {} \n ARGUMENTS: {} \n RESULT: {} \n SERVICE:{}", name, domain, args, response, service);
+            return response.response;
+        }
+        final Payload result = service.socket.requestResponse(Request.build(domain, name, args)).block(timeout.get());
+        if (result == null) {
+            log.error("[{}] error to request,got null result. \n DOMAIN:: {} \n ARGUMENTS: {} \n SERVICE {}", name, domain, args, service);
+            return Result.error(new IllegalAccessError("error to call remote service " + service.name + " from " + name));
+        }
+        final Response response = Response.parse(result);
+        return response.response;
+
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public void setTimeout(@Nullable Duration timeout) {
+        this.timeout.set(timeout);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public void setDebug(boolean debug) {
+        this.debug.set(debug);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public void release() {
+        localServers.forEach((i, s) -> {
+            if (!s.isDisposed()) {
+                s.dispose();
+            }
+        });
+        remoteRegistry.forEach((k, x) -> {
+            if (!x.socket.isDisposed()) {
+                x.socket.dispose();
+            }
+        });
+
+        localServices.clear();
+        localServers.clear();
+
+        remoteNames.clear();
+        remoteServices.clear();
+        remoteRegistry.clear();
+
+        handler.clear();
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public void startClient(String name, ClientTransport transport) {
+        if (localServers.containsKey(name))
+            throw new IllegalStateException("a service or client with name is already exists ! name is " + name);
+        RSocketConnector.create()
+            .reconnect(Retry.indefinitely())
+            .payloadDecoder(PayloadDecoder.ZERO_COPY)
+            .acceptor((setup, sending) -> {
+                final Service service = Service.builder()
+                    .idx(remoteRegistry.size() + 1)
+                    .socket(sending)
+                    .build();
+                if (debug.get()) {
+                    log.warn("remote connect to client [{}]", name);
+                }
+                addOrUpdateRemote(service, null);
+                return Mono.just(new ServiceRSocket(name, service));
+
+            })
+            .connect(transport)
+            .subscribe(client -> {
+                if (debug.get()) {
+                    log.warn("rpc client [{}] started", name);
+                }
+                addLocal(client, name);
+            });
+    }
+
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public void startServer(String name, ServerTransport<? extends Closeable> transport) {
+
+        if (localServers.containsKey(name))
+            throw new IllegalStateException("a service or client with name is already exists ! name is " + name);
+        RSocketServer.create()
+            .payloadDecoder(PayloadDecoder.ZERO_COPY)
+            .acceptor((setup, sending) -> {
+                final Service service = Service.builder()
+                    .idx(remoteRegistry.size() + 1)
+                    .name("UNK")
+                    .socket(sending)
+                    .build();
+                if (debug.get()) {
+                    log.warn("remote connect to server [{}]", name);
+                }
+                addOrUpdateRemote(service, null);
+                return Mono.just(new ServiceRSocket(name, service));
+
+            })
+            .bind(transport)
+            .subscribe(server -> {
+                if (debug.get()) {
+                    log.warn("server [{}] started on {}", name, transport);
+                }
+                addLocal(server, name);
+            });
+
+
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @SuppressWarnings("unchecked")
+    @Override
+    public <T> T createClientService(Class<T> clientKlass, @Nullable Map<String, Function<Object[], Object[]>> argumentProcessor) {
+        return (T) clientCreator.create(clientKlass, argumentProcessor);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public <T> void registerService(T service, Class<T> serviceKlass, @Nullable Map<String, Function<Object, Object>> resultProcessor) {
+        serviceRegister.register(service, serviceKlass, resultProcessor);
+        syncServMeta();
+    }
+
+
+    @Override
+    public @Unmodifiable List<String> names() {
+        return Collections.unmodifiableList(new ArrayList<>(localServers.keySet()));
+    }
+
+    @Override
+    public boolean dispose(@NotNull String name) {
+        if (localServers.containsKey(name)) {
+            localServers.get(name).dispose();
+            localServers.remove(name);
+            return true;
+        }
+        return false;
+    }
+
+    class ServiceRSocket implements RSocket {
+        public
+        final AtomicReference<Service> metaRef = new AtomicReference<>();
+        public final String serverName;
+
+        ServiceRSocket(String serverName, Service service) {
+            this.serverName = serverName;
+            this.metaRef.set(service);
+            service.setServer(this);
+        }
+
+        @Override
+        public @NotNull Mono<Void> fireAndForget(@NotNull Payload payload) {
+            if (debug.get()) {
+                log.warn("on fireAndForget {}", dump(metaRef.get(), payload));
+            }
+            fire(payload, metaRef.get());
+            return Mono.empty();
+        }
+
+        @Override
+        public @NotNull Mono<Payload> requestResponse(@NotNull Payload payload) {
+            if (debug.get()) {
+                log.warn("on requestResponse {}", dump(metaRef.get(), payload));
+            }
+            return request(payload, metaRef.get());
+        }
+
+        @Override
+        public @NotNull Mono<Void> metadataPush(@NotNull Payload payload) {
+            final ServMeta servMeta = ServMeta.parse(payload);
+            log.debug("[{}]process meta for MetadataPush in \n SERV_META: {} \n SERVICE: {}", name, servMeta, metaRef.get());
+            metaProcess(servMeta, metaRef.get());
+            return Mono.empty();
+        }
+
+        public void removeRegistry() {
+            remoteRegistry.remove(metaRef.get().idx);
+            remoteServices.forEach((k, v) -> v.remove(metaRef.get()));
+        }
+
+        @Override
+        public @NotNull Mono<Void> onClose() {
+            removeRegistry();
+            return Mono.empty();
+        }
+
+    }
+
+}
