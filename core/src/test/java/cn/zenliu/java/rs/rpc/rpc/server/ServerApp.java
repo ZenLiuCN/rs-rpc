@@ -19,7 +19,7 @@ public class ServerApp {
             val rpcService = Rpc.newInstance("server", false);
             rpcService.setDebug(true);
             rpcService.registerService(new TestServiceImpl(), TestService.class, null);
-            rpcService.startServer("aServer", Config.Server.builder().port(7000).build());
+            rpcService.startServer("aServer", Config.Resume.builder().port(7000).build());
             Runtime.getRuntime().addShutdownHook(new Thread(rpcService::release));
         }).start();
     }

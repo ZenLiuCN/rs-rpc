@@ -6,11 +6,13 @@ import cn.zenliu.java.rs.rpc.api.Scope;
 import cn.zenliu.java.rs.rpc.core.ProxyUtil.ClientCreator;
 import cn.zenliu.java.rs.rpc.core.ProxyUtil.ServiceRegister;
 import io.netty.buffer.ByteBufUtil;
+import io.netty.buffer.Unpooled;
 import io.rsocket.Closeable;
 import io.rsocket.Payload;
 import io.rsocket.RSocket;
 import io.rsocket.core.RSocketConnector;
 import io.rsocket.core.RSocketServer;
+import io.rsocket.core.Resume;
 import io.rsocket.frame.decoder.PayloadDecoder;
 import io.rsocket.transport.ClientTransport;
 import io.rsocket.transport.ServerTransport;
@@ -29,6 +31,7 @@ import reactor.core.publisher.Mono;
 import reactor.util.retry.Retry;
 
 import java.io.Serializable;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -147,17 +150,6 @@ public final class ScopeImpl implements Scope, Serializable {
         return newIdx;
     }
 
-    static Retry buildClientRetry(Config.ClientConfig config) {
-        final Config.Retry retry = config.getRetry();
-        if (retry instanceof Config.Retry.FixedDelay) {
-            return Retry.fixedDelay(((Config.Retry.FixedDelay) retry).getMaxAttempts(), ((Config.Retry.FixedDelay) retry).getFixedDelay());
-        } else if (retry instanceof Config.Retry.Backoff) {
-            return Retry.backoff(((Config.Retry.Backoff) retry).getMaxAttempts(), ((Config.Retry.Backoff) retry).getMinDelay());
-        } else if (retry instanceof Config.Retry.Max) {
-            return Retry.max(((Config.Retry.Max) retry).getMaxAttempts());
-        }
-        return Retry.indefinitely();
-    }
 
     /**
      * update meta in RemotesRegistry
@@ -268,18 +260,6 @@ public final class ScopeImpl implements Scope, Serializable {
 
     }
 
-    static ClientTransport buildClient(Config.ClientConfig config) {
-        switch (config.getMode()) {
-            case 0:
-                return TcpClientTransport.create(
-                    Objects.requireNonNull(config.getHost(), "must with HOST defined for client mode 0"),
-                    Objects.requireNonNull(config.getPort(), "must with PORT defined for client mode 0"));
-            case 1:
-                return WebsocketClientTransport.create(
-                    Objects.requireNonNull(config.getUri(), "must with URI defined for client mode 1"));
-        }
-        throw new IllegalStateException("not supported transport mode:" + config.getMode());
-    }
 
     void forgetRouting(String domain, Object[] args) {
         final Optional<Service> sockets = routing(domain);
@@ -361,19 +341,6 @@ public final class ScopeImpl implements Scope, Serializable {
         handler.clear();
     }
 
-    static ServerTransport<? extends Closeable> buildServer(Config.ServerConfig config) {
-        switch (config.getMode()) {
-            case 0:
-                return config.getBindAddress() != null ?
-                    TcpServerTransport.create(config.getBindAddress(),
-                        Objects.requireNonNull(config.getPort(), "must with PORT defined for server mode 0"))
-                    : TcpServerTransport.create(Objects.requireNonNull(config.getPort(), "must with PORT defined for server mode 0"));
-            //TODO how to isolate HTTPServer?
-
-
-        }
-        throw new IllegalStateException("not supported transport mode:" + config.getMode());
-    }
 
     /**
      * add or update Meta
@@ -438,6 +405,56 @@ public final class ScopeImpl implements Scope, Serializable {
         }
     }
 
+    static ServerTransport<? extends Closeable> buildTransport(Config.ServerConfig config) {
+        switch (config.getMode()) {
+            case 0:
+                return config.getBindAddress() != null ?
+                    TcpServerTransport.create(config.getBindAddress(),
+                        Objects.requireNonNull(config.getPort(), "must with PORT defined for server mode 0"))
+                    : TcpServerTransport.create(Objects.requireNonNull(config.getPort(), "must with PORT defined for server mode 0"));
+            //TODO how to isolate HTTPServer?
+
+
+        }
+        throw new IllegalStateException("not supported transport mode:" + config.getMode());
+    }
+
+    static ClientTransport buildTransport(Config.ClientConfig config) {
+        switch (config.getMode()) {
+            case 0:
+                return TcpClientTransport.create(
+                    Objects.requireNonNull(config.getHost(), "must with HOST defined for client mode 0"),
+                    Objects.requireNonNull(config.getPort(), "must with PORT defined for client mode 0"));
+            case 1:
+                return WebsocketClientTransport.create(
+                    Objects.requireNonNull(config.getUri(), "must with URI defined for client mode 1"));
+        }
+        throw new IllegalStateException("not supported transport mode:" + config.getMode());
+    }
+
+    static Retry buildRetry(Config.Retry retry) {
+        if (retry instanceof Config.Retry.FixedDelay) {
+            return Retry.fixedDelay(((Config.Retry.FixedDelay) retry).getMaxAttempts(), ((Config.Retry.FixedDelay) retry).getFixedDelay());
+        } else if (retry instanceof Config.Retry.Backoff) {
+            return Retry.backoff(((Config.Retry.Backoff) retry).getMaxAttempts(), ((Config.Retry.Backoff) retry).getMinDelay());
+        } else if (retry instanceof Config.Retry.Max) {
+            return Retry.max(((Config.Retry.Max) retry).getMaxAttempts());
+        }
+        return Retry.indefinitely();
+    }
+
+    private static Resume buildResume(Config.ResumeSetting config, String name) {
+        final Resume resume = new Resume();
+        if (config.getRetry() != null) resume.retry(buildRetry(config.getRetry()));
+        if (config.isCleanupStoreOnKeepAlive()) resume.cleanupStoreOnKeepAlive();
+        final byte[] token = config.getToken() == null ? name.getBytes(StandardCharsets.UTF_8) : config.getToken().getBytes(StandardCharsets.UTF_8);
+        resume.token(() -> Unpooled.wrappedBuffer(token));
+        resume.sessionDuration(config.getSessionDuration() == null ? Duration.ofSeconds(120) : config.getSessionDuration())
+            .streamTimeout(config.getStreamTimeout() == null ? Duration.ofSeconds(10) : config.getStreamTimeout());
+        return resume;
+
+    }
+
     /**
      * {@inheritDoc}
      */
@@ -446,8 +463,7 @@ public final class ScopeImpl implements Scope, Serializable {
         if (localServers.containsKey(name))
             throw new IllegalStateException("a service or client with name is already exists ! name is " + name);
         final RSocketConnector builder = RSocketConnector.create()
-//            .resume(new Resume())
-            .reconnect(buildClientRetry(config))
+            .reconnect(buildRetry(config.getRetry()))
             .payloadDecoder(config.getPayloadCodec() == 1 ? PayloadDecoder.DEFAULT : PayloadDecoder.ZERO_COPY)
             .keepAlive(
                 config.getKeepAliveInterval() == null ? Duration.ofSeconds(20) : config.getKeepAliveInterval(),
@@ -467,7 +483,8 @@ public final class ScopeImpl implements Scope, Serializable {
             });
         if (config.getFragment() != null) builder.fragment(config.getFragment());
         if (config.getMaxInboundPayloadSize() != null) builder.maxInboundPayloadSize(config.getMaxInboundPayloadSize());
-        builder.connect(buildClient(config))
+        if (config.getResume() != null) builder.resume(buildResume(config.getResume(), name));
+        builder.connect(buildTransport(config))
             .subscribe(client -> {
                 if (debug.get()) {
                     log.warn("rpc client [{}] started", name);
@@ -483,9 +500,8 @@ public final class ScopeImpl implements Scope, Serializable {
     public void startServer(String name, Config.ServerConfig config) {
         if (localServers.containsKey(name))
             throw new IllegalStateException("a service or client with name is already exists ! name is " + name);
-        final ServerTransport<? extends Closeable> transport = buildServer(config);
+        final ServerTransport<? extends Closeable> transport = buildTransport(config);
         final RSocketServer builder = RSocketServer.create()
-//            .resume(new Resume())
             .payloadDecoder(config.getPayloadCodec() == 1 ? PayloadDecoder.DEFAULT : PayloadDecoder.ZERO_COPY)
             .acceptor((setup, sending) -> {
                 final Service service = Service.builder()
@@ -500,6 +516,7 @@ public final class ScopeImpl implements Scope, Serializable {
                 return Mono.just(new ServiceRSocket(name, service));
 
             });
+        if (config.getResume() != null) builder.resume(buildResume(config.getResume(), name));
         if (config.getFragment() != null) builder.fragment(config.getFragment());
         if (config.getMaxInboundPayloadSize() != null) builder.maxInboundPayloadSize(config.getMaxInboundPayloadSize());
         builder.bind(transport)
