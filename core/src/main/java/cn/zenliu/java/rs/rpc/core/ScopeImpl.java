@@ -342,41 +342,16 @@ public final class ScopeImpl implements Scope, Serializable {
     }
 
 
-    /**
-     * add or update Meta
-     *
-     * @param service    the remote meta
-     * @param oldService the old meta
-     */
-    void addOrUpdateRemote(Service service, Service oldService) {
-        if (oldService == null && service.name.equals(NONE_META_NAME)) {
-            if (debug.get()) {
-                log.warn("a new connection found {}, sync serv meta :{}", service, localServices);
-            }
-            remoteRegistry.put(service.idx, service);
-            service.socket.metadataPush(servMetaBuilder.get()).subscribe();
-            return;
-        }
-        final int remoteIdx = oldService.idx >= 0 ? oldService.idx : confirmRemote(service.name);
-        if (oldService.getName().equals(NONE_META_NAME)) remoteRegistry.remove(oldService.idx);
-        if (remoteRegistry.containsKey(remoteIdx)) {
-            service.setIdx(remoteIdx);
-            final Service olderService = remoteRegistry.get(remoteIdx);
-            if (service.idx == -1) service.setIdx(remoteIdx);
-            if (service.socket == null) service.setSocket(olderService.socket);
-            if (service.weight == 0) service.setWeight(Math.max(olderService.weight, 1));
-            log.debug("update meta for remote {}[{}] ", service, remoteIdx);
-            remoteRegistry.put(remoteIdx, service);
-            log.debug("remove and update meta from {}  to {}", oldService, service);
-            updateRemoteService(service, olderService);
-        } else {
-            log.debug("new meta for remote {}[{}] ", service, remoteIdx);
-            if (service.idx == -1) service.setIdx(remoteIdx);
-            if (service.weight == 0) service.setWeight(1);
-            remoteRegistry.put(remoteIdx, service);
-            updateRemoteService(service, oldService);
-            // meta.socket.metadataPush(metaBuilder.get()).subscribe();
-        }
+    private static Resume buildResume(Config.ResumeSetting config, String name, boolean client) {
+        final Resume resume = new Resume();
+        if (client) if (config.getRetry() != null) resume.retry(buildRetry(config.getRetry()));
+        if (config.isCleanupStoreOnKeepAlive()) resume.cleanupStoreOnKeepAlive();
+        final byte[] token = config.getToken() == null ? name.getBytes(StandardCharsets.UTF_8) : config.getToken().getBytes(StandardCharsets.UTF_8);
+        if (client) resume.token(() -> Unpooled.wrappedBuffer(token));
+        if (config.getSessionDuration() != null) resume.sessionDuration(config.getSessionDuration());
+        if (config.getStreamTimeout() != null) resume.streamTimeout(config.getStreamTimeout());
+        return resume;
+
     }
 
     /**
@@ -443,16 +418,41 @@ public final class ScopeImpl implements Scope, Serializable {
         return Retry.indefinitely();
     }
 
-    private static Resume buildResume(Config.ResumeSetting config, String name) {
-        final Resume resume = new Resume();
-        if (config.getRetry() != null) resume.retry(buildRetry(config.getRetry()));
-        if (config.isCleanupStoreOnKeepAlive()) resume.cleanupStoreOnKeepAlive();
-        final byte[] token = config.getToken() == null ? name.getBytes(StandardCharsets.UTF_8) : config.getToken().getBytes(StandardCharsets.UTF_8);
-        resume.token(() -> Unpooled.wrappedBuffer(token));
-        resume.sessionDuration(config.getSessionDuration() == null ? Duration.ofSeconds(120) : config.getSessionDuration())
-            .streamTimeout(config.getStreamTimeout() == null ? Duration.ofSeconds(10) : config.getStreamTimeout());
-        return resume;
-
+    /**
+     * add or update Meta
+     *
+     * @param service    the remote meta
+     * @param oldService the old meta
+     */
+    void addOrUpdateRemote(Service service, Service oldService) {
+        if (oldService == null && service.name.equals(NONE_META_NAME)) {
+            if (debug.get()) {
+                log.debug("a new connection found {} \n sync serv meta :{}", service, localServices);
+            }
+            remoteRegistry.put(service.idx, service);
+            service.socket.metadataPush(servMetaBuilder.get()).subscribe();
+            return;
+        }
+        final int remoteIdx = oldService.idx >= 0 ? oldService.idx : confirmRemote(service.name);
+        if (oldService.getName().equals(NONE_META_NAME)) remoteRegistry.remove(oldService.idx);
+        if (remoteRegistry.containsKey(remoteIdx)) {
+            service.setIdx(remoteIdx);
+            final Service olderService = remoteRegistry.get(remoteIdx);
+            if (service.idx == -1) service.setIdx(remoteIdx);
+            if (service.socket == null) service.setSocket(olderService.socket);
+            if (service.weight == 0) service.setWeight(Math.max(olderService.weight, 1));
+            log.debug("update meta for remote {}[{}] ", service, remoteIdx);
+            remoteRegistry.put(remoteIdx, service);
+            log.debug("remove and update meta from {}  to {}", oldService, service);
+            updateRemoteService(service, olderService);
+        } else {
+            log.debug("new meta for remote {}[{}] ", service, remoteIdx);
+            if (service.idx == -1) service.setIdx(remoteIdx);
+            if (service.weight == 0) service.setWeight(1);
+            remoteRegistry.put(remoteIdx, service);
+            updateRemoteService(service, oldService);
+            // meta.socket.metadataPush(metaBuilder.get()).subscribe();
+        }
     }
 
     /**
@@ -475,20 +475,20 @@ public final class ScopeImpl implements Scope, Serializable {
                     .socket(sending)
                     .build();
                 if (debug.get()) {
-                    log.warn("remote connect to client [{}]", name);
+                    log.debug("remote connect to client [{}]", name);
                 }
+                final ServiceRSocket rSocket = new ServiceRSocket(name, service, false);
+                service.setServer(rSocket);
                 addOrUpdateRemote(service, null);
-                return Mono.just(new ServiceRSocket(name, service));
+                return Mono.just(rSocket);
 
             });
         if (config.getFragment() != null) builder.fragment(config.getFragment());
         if (config.getMaxInboundPayloadSize() != null) builder.maxInboundPayloadSize(config.getMaxInboundPayloadSize());
-        if (config.getResume() != null) builder.resume(buildResume(config.getResume(), name));
+        if (config.getResume() != null) builder.resume(buildResume(config.getResume(), name, true));
         builder.connect(buildTransport(config))
             .subscribe(client -> {
-                if (debug.get()) {
-                    log.warn("rpc client [{}] started", name);
-                }
+                log.debug("rpc client [{}] started", name);
                 addLocal(client, name);
             });
     }
@@ -509,20 +509,19 @@ public final class ScopeImpl implements Scope, Serializable {
                     .name("UNK")
                     .socket(sending)
                     .build();
-                if (debug.get()) {
-                    log.warn("remote connect to server [{}]", name);
-                }
+                log.debug("remote connect to server [{}]", name);
+                final ServiceRSocket rSocket = new ServiceRSocket(name, service, true);
+                service.setServer(rSocket);
                 addOrUpdateRemote(service, null);
-                return Mono.just(new ServiceRSocket(name, service));
-
+                return Mono.just(rSocket);
             });
-        if (config.getResume() != null) builder.resume(buildResume(config.getResume(), name));
+        if (config.getResume() != null) builder.resume(buildResume(config.getResume(), name, false));
         if (config.getFragment() != null) builder.fragment(config.getFragment());
         if (config.getMaxInboundPayloadSize() != null) builder.maxInboundPayloadSize(config.getMaxInboundPayloadSize());
         builder.bind(transport)
             .subscribe(server -> {
                 if (debug.get()) {
-                    log.warn("server [{}] started on {}", name, transport);
+                    log.debug("server [{}] started on {}", name, transport);
                 }
                 addLocal(server, name);
             });
@@ -562,21 +561,22 @@ public final class ScopeImpl implements Scope, Serializable {
         return false;
     }
 
-    class ServiceRSocket implements RSocket {
+    final class ServiceRSocket implements RSocket {
         public
         final AtomicReference<Service> metaRef = new AtomicReference<>();
         public final String serverName;
+        public final boolean server;
 
-        ServiceRSocket(String serverName, Service service) {
+        ServiceRSocket(String serverName, Service service, boolean isServer) {
             this.serverName = serverName;
+            this.server = isServer;
             this.metaRef.set(service);
-            service.setServer(this);
         }
 
         @Override
         public @NotNull Mono<Void> fireAndForget(@NotNull Payload payload) {
             if (debug.get()) {
-                log.warn("on fireAndForget {}", dump(metaRef.get(), payload));
+                log.debug("on fireAndForget {}", dump(metaRef.get(), payload));
             }
             fire(payload, metaRef.get());
             return Mono.empty();
@@ -585,7 +585,7 @@ public final class ScopeImpl implements Scope, Serializable {
         @Override
         public @NotNull Mono<Payload> requestResponse(@NotNull Payload payload) {
             if (debug.get()) {
-                log.warn("on requestResponse {}", dump(metaRef.get(), payload));
+                log.debug("on requestResponse {}", dump(metaRef.get(), payload));
             }
             return request(payload, metaRef.get());
         }
@@ -609,6 +609,14 @@ public final class ScopeImpl implements Scope, Serializable {
             return Mono.empty();
         }
 
+        @Override
+        public String toString() {
+            return "ServiceRSocket{" +
+                "meta=" + metaRef.get() +
+                ", serverName='" + serverName + '\'' +
+                ", server=" + server +
+                '}';
+        }
     }
 
 }

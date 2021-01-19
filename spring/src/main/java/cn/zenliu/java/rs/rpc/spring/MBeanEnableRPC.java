@@ -1,6 +1,5 @@
 package cn.zenliu.java.rs.rpc.spring;
 
-import cn.zenliu.java.rs.rpc.api.Scope;
 import cn.zenliu.java.rs.rpc.core.Rpc;
 import cn.zenliu.java.rs.rpc.core.ScopeImpl;
 import cn.zenliu.java.rs.rpc.core.Service;
@@ -44,7 +43,7 @@ public @interface MBeanEnableRPC {
 
         @ManagedOperation(description = "查看当前启用的Scope名称")
         public Set<String> getScopeName() {
-            return Rpc.scope;
+            return Rpc.scopes.keySet();
         }
 
 
@@ -106,7 +105,7 @@ public @interface MBeanEnableRPC {
             if (name.equals(Rpc.GLOBAL_NAME)) {
                 return (ScopeImpl) Rpc.Global;
             }
-            return (ScopeImpl) ctx.getBean(name, Scope.class);
+            return (ScopeImpl) Rpc.scopes.getOrDefault(name, null);
         }
     }
 }

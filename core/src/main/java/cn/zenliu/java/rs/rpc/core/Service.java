@@ -126,7 +126,10 @@ public final class Service implements Serializable {
             "\n name='" + name + '\'' +
             "\n service=" + service +
             "\n socket=" + socket +
-            "\n server=" + server +
+            "\n server=" + "ServiceRSocket{" +
+            "serverName='" + server.serverName + '\'' +
+            ", isServer=" + server.server +
+            '}' +
             "\n weight=" + weight +
             "\n idx=" + idx +
             "\n-----------------------------------";

@@ -74,21 +74,51 @@ public interface Config {
         @Setter
         class Max implements Retry {
             long maxAttempts;
+
+            Max(long maxAttempts) {
+                this.maxAttempts = maxAttempts;
+            }
+
+            public static Max of(long maxAttempts) {
+                return new Max(maxAttempts);
+            }
         }
 
         @Getter
         @Setter
         final class FixedDelay extends Max {
             Duration fixedDelay;
+
+            FixedDelay(long maxAttempts, Duration fixedDelay) {
+                super(maxAttempts);
+                this.fixedDelay = fixedDelay;
+            }
+
+            public static FixedDelay of(long maxAttempts, Duration fixedDelay) {
+                return new FixedDelay(maxAttempts, fixedDelay);
+            }
         }
 
         @Getter
         @Setter
         final class Backoff extends Max {
             Duration minDelay;
+
+            Backoff(long maxAttempts, Duration minDelay) {
+                super(maxAttempts);
+                this.minDelay = minDelay;
+            }
+
+            public static Backoff of(long maxAttempts, Duration minDelay) {
+                return new Backoff(maxAttempts, minDelay);
+            }
         }
 
         final class Indefinitely implements Retry {
+            public static Indefinitely INSTANCE = new Indefinitely();
+
+            private Indefinitely() {
+            }
         }
     }
 

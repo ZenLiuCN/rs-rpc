@@ -19,10 +19,18 @@ public interface Rpc {
      * Global Scope (never routeing)
      */
     Scope Global = ScopeImpl.builder().name(JvmUnique.uniqueNameWithRandom(GLOBAL_NAME)).route(true).build();
-    Map<String, Scope> scopes = new ConcurrentHashMap<>();
+    Map<String, Scope> scopes = new ConcurrentHashMap<>(2);
+    boolean withGlobal = internal.nothing();
 
-    static Scope newInstance(@NotNull String name, boolean routeing, boolean randomIdentity) {
-        String trueName = randomIdentity ? JvmUnique.uniqueNameWithRandom(name) : JvmUnique.uniqueNameWithoutRandom(name);
+    /**
+     * create a new Scope
+     *
+     * @param name     scope name
+     * @param routeing does using routeing
+     * @return new Scope
+     */
+    static Scope newScope(@NotNull String name, boolean routeing) {
+        String trueName = JvmUnique.uniqueNameWithoutRandom(name);
         if (scopes.containsKey(trueName))
             throw new IllegalArgumentException("name of scope is already exists! " + trueName);
         final ScopeImpl newScope = ScopeImpl.builder().name(trueName).route(routeing).build();
@@ -30,7 +38,14 @@ public interface Rpc {
         return newScope;
     }
 
-    static Scope findOrCreate(@NotNull String name, boolean routeing) {
+    /**
+     * fetch a exists scope or create new one
+     *
+     * @param name     scope name
+     * @param routeing does using routeing
+     * @return already exists one not change routeing status!
+     */
+    static Scope fetchOrCreate(@NotNull String name, boolean routeing) {
         if (name.equals(GLOBAL_NAME)) return Global;
         String trueName = JvmUnique.uniqueNameWithoutRandom(name);
         if (scopes.containsKey(trueName))
@@ -38,6 +53,13 @@ public interface Rpc {
         final ScopeImpl newScope = ScopeImpl.builder().name(trueName).route(routeing).build();
         scopes.put(trueName, newScope);
         return newScope;
+    }
+
+    final class internal {
+        static boolean nothing() {
+            scopes.put(Global.getName(), Global);
+            return true;
+        }
     }
 
     /**
