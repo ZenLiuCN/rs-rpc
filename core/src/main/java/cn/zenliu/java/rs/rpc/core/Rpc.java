@@ -5,10 +5,8 @@ import cn.zenliu.java.rs.rpc.api.JvmUnique;
 import cn.zenliu.java.rs.rpc.api.Scope;
 import org.jetbrains.annotations.NotNull;
 
-import java.util.Collections;
 import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.CopyOnWriteArraySet;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * @author Zen.Liu
@@ -21,15 +19,25 @@ public interface Rpc {
      * Global Scope (never routeing)
      */
     Scope Global = ScopeImpl.builder().name(JvmUnique.uniqueNameWithRandom(GLOBAL_NAME)).route(true).build();
-    Set<String> scope = new CopyOnWriteArraySet<>(Collections.singletonList(Global.getName()));
+    Map<String, Scope> scopes = new ConcurrentHashMap<>();
 
-
-    static Scope newInstance(@NotNull String name, boolean routeing) {
-        String trueName = JvmUnique.uniqueNameWithRandom(name);
-        if (scope.contains(trueName))
+    static Scope newInstance(@NotNull String name, boolean routeing, boolean randomIdentity) {
+        String trueName = randomIdentity ? JvmUnique.uniqueNameWithRandom(name) : JvmUnique.uniqueNameWithoutRandom(name);
+        if (scopes.containsKey(trueName))
             throw new IllegalArgumentException("name of scope is already exists! " + trueName);
-        scope.add(trueName);
-        return ScopeImpl.builder().name(trueName).route(routeing).build();
+        final ScopeImpl newScope = ScopeImpl.builder().name(trueName).route(routeing).build();
+        scopes.put(trueName, newScope);
+        return newScope;
+    }
+
+    static Scope findOrCreate(@NotNull String name, boolean routeing) {
+        if (name.equals(GLOBAL_NAME)) return Global;
+        String trueName = JvmUnique.uniqueNameWithoutRandom(name);
+        if (scopes.containsKey(trueName))
+            return scopes.get(trueName);
+        final ScopeImpl newScope = ScopeImpl.builder().name(trueName).route(routeing).build();
+        scopes.put(trueName, newScope);
+        return newScope;
     }
 
     /**

@@ -16,10 +16,10 @@ import lombok.val;
 public class ServerApp {
     public static void run() {
         new Thread(() -> {
-            val rpcService = Rpc.newInstance("server", false);
+            val rpcService = Rpc.newInstance("server", false, false);
             rpcService.setDebug(true);
             rpcService.registerService(new TestServiceImpl(), TestService.class, null);
-            rpcService.startServer("aServer", Config.Resume.builder().port(7000).build());
+            rpcService.startServer("aServer", Config.Server.builder().port(7000).resume(Config.Resume.builder().build()).build());
             Runtime.getRuntime().addShutdownHook(new Thread(rpcService::release));
         }).start();
     }

@@ -8,10 +8,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class JvmUniqueTest {
-    String RND = "arnd|1a20|Nllq9wtlzpDySAgsNRu7hw==|64477ee1";
-    String RND_o = "arnd|1a20|Nllq9wtlzpDySAgsNRu7hw==|64477ee1";
-    String NRND = "nornd|0a20|Nllq9wtlzpDySAgsNRu7hw==|0";
-    String NRND_o = "nornd|0a20|Nllq9wtlzpDySAgsNRu7hw==|0";
+    String RND = "arnd|dc|Nllq9wtlzpDySAgsNRu7hw==|489f7ff657d2740f|e214fc73";
+    String RND_o = "arnd|dc|Nllq9wtlzpDySAgsNRu7hw==|489f7ff657d2740f|e214fc73";
+    String NRND = "nornd|dc|Nllq9wtlzpDySAgsNRu7hw==|489f7ff657d2740f|0";
+    String NRND_o = "nornd|dc|Nllq9wtlzpDySAgsNRu7hw==|489f7ff657d2740f|0";
 
     @Test
     @Order(1)
@@ -33,5 +33,8 @@ class JvmUniqueTest {
         assertTrue(mine);
         assertFalse(JvmUnique.isMineFast(RND_o));
         assertFalse(JvmUnique.isMineFast(NRND_o));
+        final JvmUnique.JvmUniqueId jvmUniqueId = JvmUnique.dumpName(NRND).get();
+        System.out.println(jvmUniqueId.dump());
+        System.out.println(Ticks.from(jvmUniqueId.getTick()));
     }
 }

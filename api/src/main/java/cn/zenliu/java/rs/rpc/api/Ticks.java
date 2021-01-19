@@ -42,7 +42,7 @@ public interface Ticks {
      */
     static long from(Instant instant, boolean isLocal) {
         long nano = instant.getNano() / 100;
-        long sec = instant.getEpochSecond() - base * tickPerSec;
+        long sec = (instant.getEpochSecond() - base) * tickPerSec;
         long tick = sec + nano;
         return tick | (isLocal ? KindLocal : KindUtc);
     }

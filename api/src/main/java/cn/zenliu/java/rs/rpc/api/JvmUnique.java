@@ -13,6 +13,8 @@ import java.util.Collections;
 import java.util.Enumeration;
 import java.util.Optional;
 
+import static cn.zenliu.java.rs.rpc.api.Ticks.fromNowUTC;
+
 /**
  * Tool to Build a Unique Id For Current Jvm<br>
  * 1. every Jvm Instance is differ by {@link JvmUnique#PROCESS_ID}
@@ -26,6 +28,7 @@ import java.util.Optional;
 public interface JvmUnique {
     long PROCESS_ID = internal.ProcessIdReader();
     String MAC_HASH = internal.getRawOrMd5Mac();
+    long TICK = fromNowUTC();
     char SPLITTER = '|';
 
     static String hexdump(byte[] array) {
@@ -50,6 +53,10 @@ public interface JvmUnique {
 
     static boolean isMineFast(String id) {
         return JvmUniqueId.fastCompare(id);
+    }
+
+    static Optional<JvmUniqueId> dumpName(String uniqueName) {
+        return JvmUniqueId.parse(uniqueName);
     }
 
     final class internal {
@@ -91,12 +98,14 @@ public interface JvmUnique {
     final class JvmUniqueId {
         @Getter final String name;
         @Getter final long processId;
+        @Getter final long tick;
         @Getter final String macHash;
         @Getter final int random;
 
-        JvmUniqueId(String name, long processId, String macHash, int random) {
+        JvmUniqueId(String name, long processId, String macHash, long startTimestamp, int random) {
             this.name = name;
             this.processId = processId;
+            this.tick = startTimestamp;
             this.macHash = macHash;
             this.random = random;
         }
@@ -106,12 +115,14 @@ public interface JvmUnique {
             this.processId = PROCESS_ID;
             this.macHash = MAC_HASH;
             this.random = random;
+            this.tick = TICK;
         }
 
         JvmUniqueId(String name) {
             this.name = name;
             this.processId = PROCESS_ID;
             this.macHash = MAC_HASH;
+            this.tick = TICK;
             this.random = internal.random();
         }
 
@@ -124,6 +135,7 @@ public interface JvmUnique {
                 StringBuilder valBuilder = new StringBuilder();
                 String mac = null;
                 long pid = -1;
+                long ts = -1;
                 for (char aChar : chars) {
                     if (aChar == SPLITTER) {
                         switch (cnt) {
@@ -141,7 +153,14 @@ public interface JvmUnique {
                             }
                             case 2: {
                                 mac = valBuilder.toString();
-                                return mac.equals(MAC_HASH);
+                                if (!mac.equals(MAC_HASH)) return false;
+                                valBuilder.setLength(0);
+                                cnt = 3;
+                                continue;
+                            }
+                            case 3: {
+                                ts = Long.parseLong(valBuilder.toString(), 16);
+                                return ts == TICK;
                             }
                             default:
                                 return false;
@@ -166,6 +185,7 @@ public interface JvmUnique {
                 String name = null;
                 String mac = null;
                 long pid = -1;
+                long ts = -1;
                 int rnd = 0;
                 for (char aChar : chars) {
                     if (aChar == SPLITTER) {
@@ -188,6 +208,12 @@ public interface JvmUnique {
                                 cnt = 3;
                                 continue;
                             }
+                            case 3: {
+                                ts = Long.parseLong(valBuilder.toString(), 16);
+                                valBuilder.setLength(0);
+                                cnt = 4;
+                                continue;
+                            }
                             default:
                                 return Optional.empty();
                         }
@@ -197,7 +223,7 @@ public interface JvmUnique {
                 }
                 if (valBuilder.length() > 0) rnd = Integer.parseInt(valBuilder.toString(), 16);
                 if (name == null || mac == null) return Optional.empty();
-                return Optional.of(new JvmUniqueId(name, pid, mac, rnd));
+                return Optional.of(new JvmUniqueId(name, pid, mac, ts, rnd));
             } catch (NumberFormatException e) {
                 return Optional.empty();
             }
@@ -212,7 +238,11 @@ public interface JvmUnique {
 
         @Override
         public String toString() {
-            return name + SPLITTER + Long.toHexString(processId) + SPLITTER + macHash + SPLITTER + Integer.toHexString(random);
+            return name + SPLITTER + Long.toHexString(processId) + SPLITTER + macHash + SPLITTER + Long.toHexString(tick) + SPLITTER + Integer.toHexString(random);
+        }
+
+        public String dump() {
+            return "IDENTITY:" + name + ";PROCESS:" + processId + ";MAC:" + macHash + ";VM_TICK:" + tick + ";RND:" + random;
         }
     }
 }
