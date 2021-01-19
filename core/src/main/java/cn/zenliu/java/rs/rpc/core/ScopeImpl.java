@@ -19,6 +19,7 @@ import io.rsocket.transport.ServerTransport;
 import io.rsocket.transport.netty.client.TcpClientTransport;
 import io.rsocket.transport.netty.client.WebsocketClientTransport;
 import io.rsocket.transport.netty.server.TcpServerTransport;
+import io.rsocket.util.DefaultPayload;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
@@ -119,8 +120,23 @@ public final class ScopeImpl implements Scope, Serializable {
         addOrUpdateRemote(newService, service);
     }
 
+    private static Resume buildResume(Config.ResumeSetting config, boolean client) {
+        final Resume resume = new Resume();
+        if (client) if (config.getRetry() != null) resume.retry(buildRetry(config.getRetry()));
+        if (config.isCleanupStoreOnKeepAlive()) resume.cleanupStoreOnKeepAlive();
+
+        if (client && config.getToken() != null) {
+            final byte[] token = config.getToken().getBytes(StandardCharsets.UTF_8);
+            resume.token(() -> Unpooled.wrappedBuffer(token));
+        }
+        if (config.getSessionDuration() != null) resume.sessionDuration(config.getSessionDuration());
+        if (config.getStreamTimeout() != null) resume.streamTimeout(config.getStreamTimeout());
+        return resume;
+
+    }
+
     /**
-     * Sync Meta data
+     * Sync Meta data;
      */
     private void syncServMeta() {
         calcRoutes();
@@ -129,10 +145,9 @@ public final class ScopeImpl implements Scope, Serializable {
         if (debug.get()) log.debug("will sync serv meta {} to remote {}  ", this.routes.get(), remoteRegistry);
         remoteRegistry.forEach((i, v) -> {
             if (debug.get()) log.debug(" sync serv meta to remote[{}]: {} ", v, this.routes.get());
-            v.socket.metadataPush(meta);
+            pushMeta(meta, v);
         });
     }
-
 
     /**
      * generate index by Remote Name
@@ -171,12 +186,31 @@ public final class ScopeImpl implements Scope, Serializable {
     }
 
     /**
+     * current is not support metadata push with Resume enabled!
+     * <b>note:</b>
+     * Should METADATA_PUSH should be part of resumption? #235
+     */
+    private void pushMeta(@Nullable Payload meta, Service service) {
+        service.pushMeta(meta == null ? servMetaBuilder.get() : meta);
+    }
+
+    /**
      * Process FireAndForgot
      *
      * @param p       payload
      * @param service meta of remote
      */
-    void fire(Payload p, Service service) {
+    void handleFNF(Payload p, Service service) {
+        log.debug("service {}  received  FNF", service.name);
+        if (p.data().capacity() == 0) { // a meta push must without data
+            log.debug("service {} maybe received meta via FNF", service.name);
+            ServMeta result = service.tryHandleMeta(p);
+            if (result != null) {
+                metaProcess(result, service);
+                return;
+            }
+        }
+
         final Meta meta = Request.parseMeta(p);
         log.debug("[{}] begin to process FireAndForget:" + LOG_META, name, meta, service);
         if (handler.containsKey(meta.domain)) {
@@ -211,53 +245,6 @@ public final class ScopeImpl implements Scope, Serializable {
             } else {
                 log.warn("[{}] none registered FireAndForget:" + LOG_META, name, meta, service);
             }
-    }
-
-    /**
-     * RequestResponse
-     *
-     * @param p       payload
-     * @param service meta of remote
-     * @return response Payload
-     */
-    Mono<Payload> request(Payload p, Service service) {
-        final Meta meta = Request.parseMeta(p);
-        log.debug("[{}] process RequestAndResponse:" + LOG_META, name, meta, service);
-        if (handler.containsKey(meta.domain)) {
-            try {
-                final Request request = Request.parseRequest(p);
-                final Result<Object> result;
-                if (debug.get()) {
-                    log.debug("[{}] process RequestAndResponse:" + LOG_META_REQUEST, name, meta, request, service);
-                    long st = System.nanoTime();
-                    result = handler.get(meta.domain).apply(request.arguments);
-                    long et = System.nanoTime();
-                    log.debug("[{}] process RequestAndResponse:" + LOG_META_REQUEST + "LOCAL_COST: {} μs \nRESPONSE: {}", name, meta, request, service, (et - st) / 1000.0, result);
-                } else result = handler.get(meta.domain).apply(request.arguments);
-                return Mono.just(Response.build(meta, name, result != null ? result : Result.ok(null)));
-            } catch (Exception e) {
-                log.debug("[{}] error on process RequestAndResponse:" + LOG_META, name, meta, service, e);
-                return Mono.just(Response.build(meta, name, Result.error(e)));
-            }
-        } else //do routeing
-            if (remoteServices.containsKey(meta.domain + "?")) {
-                try {
-                    final Service routeNode = remoteServices.get(meta.domain + "?").first();
-                    if (debug.get())
-                        log.debug("[{}] routeing RequestAndResponse:" + LOG_META + "\n NEXT:{}", name, meta, service, routeNode);
-                    else
-                        log.debug("[{}] routeing RequestAndResponse:" + LOG_META + "\n NEXT:{}", name, meta, service.name, routeNode.name);
-                    return routeNode.socket.requestResponse(Request.updateMeta(p, meta, name));
-                } catch (Exception e) {
-                    log.debug("[{}] error on process Routeing RequestAndResponse:" + LOG_META, name, meta, service, e);
-                    return Mono.just(Response.build(meta, name, Result.error(e)));
-                }
-            }
-        {
-            log.debug("[{}] none registered RequestAndResponse:" + LOG_META, name, meta, service);
-            return Mono.just(Response.build(meta, name, Result.error(new IllegalStateException("no such method on " + name))));
-        }
-
     }
 
 
@@ -341,16 +328,50 @@ public final class ScopeImpl implements Scope, Serializable {
         handler.clear();
     }
 
-
-    private static Resume buildResume(Config.ResumeSetting config, String name, boolean client) {
-        final Resume resume = new Resume();
-        if (client) if (config.getRetry() != null) resume.retry(buildRetry(config.getRetry()));
-        if (config.isCleanupStoreOnKeepAlive()) resume.cleanupStoreOnKeepAlive();
-        final byte[] token = config.getToken() == null ? name.getBytes(StandardCharsets.UTF_8) : config.getToken().getBytes(StandardCharsets.UTF_8);
-        if (client) resume.token(() -> Unpooled.wrappedBuffer(token));
-        if (config.getSessionDuration() != null) resume.sessionDuration(config.getSessionDuration());
-        if (config.getStreamTimeout() != null) resume.streamTimeout(config.getStreamTimeout());
-        return resume;
+    /**
+     * RequestResponse
+     *
+     * @param p       payload
+     * @param service meta of remote
+     * @return response Payload
+     */
+    Mono<Payload> handleRR(Payload p, Service service) {
+        final Meta meta = Request.parseMeta(p);
+        log.debug("[{}] process RequestAndResponse:" + LOG_META, name, meta, service);
+        if (handler.containsKey(meta.domain)) {
+            try {
+                final Request request = Request.parseRequest(p);
+                final Result<Object> result;
+                if (debug.get()) {
+                    log.debug("[{}] process RequestAndResponse:" + LOG_META_REQUEST, name, meta, request, service);
+                    long st = System.nanoTime();
+                    result = handler.get(meta.domain).apply(request.arguments);
+                    long et = System.nanoTime();
+                    log.debug("[{}] process RequestAndResponse:" + LOG_META_REQUEST + "LOCAL_COST: {} μs \nRESPONSE: {}", name, meta, request, service, (et - st) / 1000.0, result);
+                } else result = handler.get(meta.domain).apply(request.arguments);
+                return Mono.just(Response.build(meta, name, result != null ? result : Result.ok(null)));
+            } catch (Exception e) {
+                log.debug("[{}] error on process RequestAndResponse:" + LOG_META, name, meta, service, e);
+                return Mono.just(Response.build(meta, name, Result.error(e)));
+            }
+        } else //do routeing
+            if (remoteServices.containsKey(meta.domain + "?")) {
+                try {
+                    final Service routeNode = remoteServices.get(meta.domain + "?").first();
+                    if (debug.get())
+                        log.debug("[{}] routeing RequestAndResponse:" + LOG_META + "\n NEXT:{}", name, meta, service, routeNode);
+                    else
+                        log.debug("[{}] routeing RequestAndResponse:" + LOG_META + "\n NEXT:{}", name, meta, service.name, routeNode.name);
+                    return routeNode.socket.requestResponse(Request.updateMeta(p, meta, name));
+                } catch (Exception e) {
+                    log.debug("[{}] error on process Routeing RequestAndResponse:" + LOG_META, name, meta, service, e);
+                    return Mono.just(Response.build(meta, name, Result.error(e)));
+                }
+            }
+        {
+            log.debug("[{}] none registered RequestAndResponse:" + LOG_META, name, meta, service);
+            return Mono.just(Response.build(meta, name, Result.error(new IllegalStateException("no such method on " + name))));
+        }
 
     }
 
@@ -430,7 +451,7 @@ public final class ScopeImpl implements Scope, Serializable {
                 log.debug("a new connection found {} \n sync serv meta :{}", service, localServices);
             }
             remoteRegistry.put(service.idx, service);
-            service.socket.metadataPush(servMetaBuilder.get()).subscribe();
+            pushMeta(null, service);
             return;
         }
         final int remoteIdx = oldService.idx >= 0 ? oldService.idx : confirmRemote(service.name);
@@ -469,6 +490,7 @@ public final class ScopeImpl implements Scope, Serializable {
                 config.getKeepAliveInterval() == null ? Duration.ofSeconds(20) : config.getKeepAliveInterval(),
                 config.getKeepAliveMaxLifeTime() == null ? Duration.ofSeconds(90) : config.getKeepAliveMaxLifeTime()
             )
+            .setupPayload(DefaultPayload.create(Proto.to(config.getResume() != null))) //current setup from client is support resume or not
             .acceptor((setup, sending) -> {
                 final Service service = Service.builder()
                     .idx(remoteRegistry.size() + 1)
@@ -481,11 +503,11 @@ public final class ScopeImpl implements Scope, Serializable {
                 service.setServer(rSocket);
                 addOrUpdateRemote(service, null);
                 return Mono.just(rSocket);
-
             });
         if (config.getFragment() != null) builder.fragment(config.getFragment());
         if (config.getMaxInboundPayloadSize() != null) builder.maxInboundPayloadSize(config.getMaxInboundPayloadSize());
-        if (config.getResume() != null) builder.resume(buildResume(config.getResume(), name, true));
+        if (config.getResume() != null) builder
+            .resume(buildResume(config.getResume(), true));
         builder.connect(buildTransport(config))
             .subscribe(client -> {
                 log.debug("rpc client [{}] started", name);
@@ -504,10 +526,13 @@ public final class ScopeImpl implements Scope, Serializable {
         final RSocketServer builder = RSocketServer.create()
             .payloadDecoder(config.getPayloadCodec() == 1 ? PayloadDecoder.DEFAULT : PayloadDecoder.ZERO_COPY)
             .acceptor((setup, sending) -> {
+                //current setup from client is support resume or not
+                Boolean resume = Proto.from(ByteBufUtil.getBytes(setup.sliceData()), Boolean.class);
                 final Service service = Service.builder()
                     .idx(remoteRegistry.size() + 1)
                     .name("UNK")
                     .socket(sending)
+                    .resume(resume)
                     .build();
                 log.debug("remote connect to server [{}]", name);
                 final ServiceRSocket rSocket = new ServiceRSocket(name, service, true);
@@ -515,7 +540,7 @@ public final class ScopeImpl implements Scope, Serializable {
                 addOrUpdateRemote(service, null);
                 return Mono.just(rSocket);
             });
-        if (config.getResume() != null) builder.resume(buildResume(config.getResume(), name, false));
+        if (config.getResume() != null) builder.resume(buildResume(config.getResume(), false));
         if (config.getFragment() != null) builder.fragment(config.getFragment());
         if (config.getMaxInboundPayloadSize() != null) builder.maxInboundPayloadSize(config.getMaxInboundPayloadSize());
         builder.bind(transport)
@@ -563,44 +588,44 @@ public final class ScopeImpl implements Scope, Serializable {
 
     final class ServiceRSocket implements RSocket {
         public
-        final AtomicReference<Service> metaRef = new AtomicReference<>();
+        final AtomicReference<Service> serviceRef = new AtomicReference<>();
         public final String serverName;
         public final boolean server;
 
         ServiceRSocket(String serverName, Service service, boolean isServer) {
             this.serverName = serverName;
             this.server = isServer;
-            this.metaRef.set(service);
+            this.serviceRef.set(service);
         }
 
         @Override
         public @NotNull Mono<Void> fireAndForget(@NotNull Payload payload) {
             if (debug.get()) {
-                log.debug("on fireAndForget {}", dump(metaRef.get(), payload));
+                log.debug("on FireAndForget {}", dump(serviceRef.get(), payload));
             }
-            fire(payload, metaRef.get());
+            handleFNF(payload, serviceRef.get());
             return Mono.empty();
         }
 
         @Override
         public @NotNull Mono<Payload> requestResponse(@NotNull Payload payload) {
             if (debug.get()) {
-                log.debug("on requestResponse {}", dump(metaRef.get(), payload));
+                log.debug("on requestResponse {}", dump(serviceRef.get(), payload));
             }
-            return request(payload, metaRef.get());
+            return handleRR(payload, serviceRef.get());
         }
 
         @Override
         public @NotNull Mono<Void> metadataPush(@NotNull Payload payload) {
             final ServMeta servMeta = ServMeta.parse(payload);
-            log.debug("[{}]process meta for MetadataPush in \n SERV_META: {} \n SERVICE: {}", name, servMeta, metaRef.get());
-            metaProcess(servMeta, metaRef.get());
+            log.debug("[{}]process meta for MetadataPush in \n SERV_META: {} \n SERVICE: {}", name, servMeta, serviceRef.get());
+            metaProcess(servMeta, serviceRef.get());
             return Mono.empty();
         }
 
         public void removeRegistry() {
-            remoteRegistry.remove(metaRef.get().idx);
-            remoteServices.forEach((k, v) -> v.remove(metaRef.get()));
+            remoteRegistry.remove(serviceRef.get().idx);
+            remoteServices.forEach((k, v) -> v.remove(serviceRef.get()));
         }
 
         @Override
@@ -612,7 +637,7 @@ public final class ScopeImpl implements Scope, Serializable {
         @Override
         public String toString() {
             return "ServiceRSocket{" +
-                "meta=" + metaRef.get() +
+                "serviceRef=" + serviceRef.get() +
                 ", serverName='" + serverName + '\'' +
                 ", server=" + server +
                 '}';

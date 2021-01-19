@@ -1,10 +1,13 @@
 package cn.zenliu.java.rs.rpc.core;
 
 import cn.zenliu.java.rs.rpc.core.ScopeImpl.ServiceRSocket;
+import io.netty.buffer.ByteBufUtil;
+import io.rsocket.Payload;
 import io.rsocket.RSocket;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.Setter;
+import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
 
 import java.io.Serializable;
@@ -21,6 +24,7 @@ import java.util.concurrent.CopyOnWriteArraySet;
 @Builder
 @Getter
 @Setter
+@Slf4j
 public final class Service implements Serializable {
     static final String NONE_META_NAME = "UNK";
     private static final long serialVersionUID = -7451694137919068872L;
@@ -30,6 +34,7 @@ public final class Service implements Serializable {
      */
     @Builder.Default final String name = NONE_META_NAME;
     @Builder.Default final Set<String> service = new CopyOnWriteArraySet<>();
+    @Builder.Default final boolean resume = false;
     /**
      * Remote RSocket
      */
@@ -68,7 +73,7 @@ public final class Service implements Serializable {
 
     public Service setServer(@NotNull ServiceRSocket server) {
         this.server = server;
-        server.metaRef.set(this);
+        server.serviceRef.set(this);
         if (socket != null) socket.onClose().doOnTerminate(server::removeRegistry).subscribe();
         return this;
     }
@@ -122,10 +127,11 @@ public final class Service implements Serializable {
 
     @Override
     public String toString() {
-        return "\n--------------META-----------------" +
+        return "\n--------------SERVICE-----------------" +
             "\n name='" + name + '\'' +
             "\n service=" + service +
             "\n socket=" + socket +
+            "\n resume=" + resume +
             "\n server=" + "ServiceRSocket{" +
             "serverName='" + server.serverName + '\'' +
             ", isServer=" + server.server +
@@ -133,5 +139,27 @@ public final class Service implements Serializable {
             "\n weight=" + weight +
             "\n idx=" + idx +
             "\n-----------------------------------";
+    }
+
+    public void pushMeta(Payload meta) {
+        if (!resume) {
+            log.debug("service {} will push meta via MetadataPush", name);
+            socket.metadataPush(meta).subscribe();
+        } else {
+            log.debug("service {} will push meta via FNF", name);
+            socket.fireAndForget(meta).subscribe();
+        }
+    }
+
+    public ServMeta tryHandleMeta(Payload meta) {
+        //a client is never know if server support resume(also no need to )
+        try {
+            ServMeta me = Proto.from(ByteBufUtil.getBytes(meta.sliceMetadata()), ServMeta.class);
+            meta.release();
+            return me;
+        } catch (Exception e) {
+            log.debug("error to try decode ServMeta, is maybe just normal", e);
+            return null;
+        }
     }
 }

@@ -7,6 +7,7 @@ import cn.zenliu.java.rs.rpc.core.Rpc;
 import cn.zenliu.java.rs.rpc.rpc.common.TestService;
 import lombok.extern.slf4j.Slf4j;
 
+import java.time.Duration;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -20,10 +21,10 @@ public class ClientApp {
         final TestService bean = executorService.submit(() -> {
             service.startClient("aClient", Config.Client.builder()
                 .host("localhost").port(7000)
-                /* .resume(Config.Resume.builder()
-                     .sessionDuration(Duration.ofMinutes(15))
-                     //.retry(Config.Retry.FixedDelay.of(100, Duration.ofDays(10)))
-                     .build())*/
+                .resume(Config.Resume.builder()
+                    .sessionDuration(Duration.ofMinutes(15))
+                    //.retry(Config.Retry.FixedDelay.of(100, Duration.ofDays(10)))
+                    .build())
                 .build());
             return service.createClientService(TestService.class, null);
         }).get();
