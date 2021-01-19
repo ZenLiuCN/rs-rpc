@@ -13,6 +13,7 @@
 3. auto routeing is supported.
 4. totally isolation with RSocket Implement, so Maybe it could keep a good & stable API.
 5. a Result object will take any exception from Service to Client side.
+6. a routeing trace is included inside request meta, and will be returned with response.
 
 ## notes & limitations
 
