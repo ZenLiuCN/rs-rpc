@@ -1,4 +1,5 @@
 .idea/
+.code/
 target/
 *.iml
 !/.idea/copyright/*.*
