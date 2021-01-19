@@ -14,6 +14,10 @@ import java.util.concurrent.Executors;
 
 @Slf4j
 public class ClientApp {
+    public static void main(String[] args) throws InterruptedException, ExecutionException {
+        run();
+    }
+
     public static void run() throws InterruptedException, ExecutionException {
         final Scope service = Rpc.Global;
         final ExecutorService executorService = Executors.newCachedThreadPool();

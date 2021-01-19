@@ -16,6 +16,23 @@ import java.time.Duration;
 
 
 public class ServerApp {
+    public static void main(String[] args) {
+        val rpcService = Rpc.fetchOrCreate("server", false);
+        rpcService.setDebug(true);
+        rpcService.registerService(new TestServiceImpl(), TestService.class, null);
+        rpcService.startServer("aServer", Config.Server.builder().port(7000)
+            .resume(Config.Resume.builder()
+                .sessionDuration(Duration.ofMinutes(15))
+                .retry(Config.Retry.FixedDelay.of(100, Duration.ofDays(10)))
+                .cleanupStoreOnKeepAlive(true)
+                .streamTimeout(Duration.ofSeconds(5))
+                .build())
+            .build());
+        while (true) {
+
+        }
+    }
+
     public static void run() {
         new Thread(() -> {
             val rpcService = Rpc.fetchOrCreate("server", false);
