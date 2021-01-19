@@ -27,3 +27,6 @@
 
 1. this project is on some early stage. should use carefully and on your own risk.
 2. any suggestions and help are welcomed.
+3. as this is one of mine party time project, some slice of those codes maybe or been used in some commercial projects.
+   so this repository will and never mixed into codes in some commercial project, those codes should keep this rights as
+   current announced.
