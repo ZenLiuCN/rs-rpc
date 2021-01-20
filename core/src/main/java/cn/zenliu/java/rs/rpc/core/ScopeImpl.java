@@ -74,7 +74,7 @@ public final class ScopeImpl extends ScopeContext implements Scope, Serializable
     static String dump(Remote remote, Payload payload) {
         return "\n SERVICE: " + remote.name + " | SERVICES:" + remote.service + "| WEIGHT:" + remote.weight + "\n" +
             " META :\n" + ByteBufUtil.prettyHexDump(payload.sliceMetadata()) +
-            " DATA :\n" + ByteBufUtil.prettyHexDump(payload.sliceData());
+            "\n DATA :\n" + ByteBufUtil.prettyHexDump(payload.sliceData());
     }
 
 
@@ -96,6 +96,9 @@ public final class ScopeImpl extends ScopeContext implements Scope, Serializable
      */
     private void syncServMeta(Remote... except) {
         if (remotes.isEmpty()) return;
+        final int before = routes.get().size();
+        calcRoutes();
+        if (before == routes.get().size()) return;
         final Payload meta = servMetaBuilder.get();
         if (debug.get()) log.debug("will sync serv meta {} to remote {}  ", this.routes.get(), remotes);
         remotes.forEach((i, v) -> {
@@ -303,6 +306,7 @@ public final class ScopeImpl extends ScopeContext implements Scope, Serializable
         return response.response;
     }
     //endregion
+
     /**
      * {@inheritDoc}
      */
@@ -408,6 +412,7 @@ public final class ScopeImpl extends ScopeContext implements Scope, Serializable
                 final ServiceRSocket rSocket = new ServiceRSocket(name, remote, false);
                 remote.setServer(rSocket);
                 addOrUpdateRemote(remote, null);
+                if (!services.isEmpty()) pushMeta(null, remote);
                 return Mono.just(rSocket);
             });
         if (config.getFragment() != null) builder.fragment(config.getFragment());
@@ -444,6 +449,7 @@ public final class ScopeImpl extends ScopeContext implements Scope, Serializable
                 final ServiceRSocket rSocket = new ServiceRSocket(name, remote, true);
                 remote.setServer(rSocket);
                 addOrUpdateRemote(remote, null);
+                if (!services.isEmpty()) pushMeta(null, remote);
                 return Mono.just(rSocket);
             });
         if (config.getResume() != null) builder.resume(buildResume(config.getResume(), false));

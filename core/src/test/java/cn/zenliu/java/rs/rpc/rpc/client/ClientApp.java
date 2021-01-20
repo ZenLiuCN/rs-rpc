@@ -30,7 +30,7 @@ public class ClientApp {
                 .build())
             .build());
         final TestService bean = service.createClientService(TestService.class, null);
-        Thread.sleep(2000);
+        Thread.sleep(5000);
         log.warn("call {}", bean.getInt());
         log.warn("call {}", bean.getResult(1L));
         log.warn("call {}", bean.getResult(-1L));

@@ -114,10 +114,13 @@ public final class Remote implements Serializable {
                 .setSocket(socket)
                 .setIdx(idx).setWeight(0);
         }
-        synchronized (this) {
-            service.clear();
-            service.addAll(meta.service);
+        if (meta.service != null) {
+            synchronized (this) {
+                service.clear();
+                service.addAll(meta.service);
+            }
         }
+
         return this;
     }
 
@@ -149,12 +152,16 @@ public final class Remote implements Serializable {
 
     public void pushMeta(Payload meta) {
         if (!resume) {
-            log.debug("service {} will push meta via MetadataPush", name);
+            log.debug("service {} will push meta {} via MetadataPush", name, dumpMeta(meta));
             socket.metadataPush(meta).subscribe();
         } else {
-            log.debug("service {} will push meta via FNF", name);
+            log.debug("service {} will push meta {} via FNF", name, dumpMeta(meta));
             socket.fireAndForget(meta).subscribe();
         }
+    }
+
+    private String dumpMeta(Payload meta) {
+        return ByteBufUtil.prettyHexDump(meta.sliceMetadata());
     }
 
     public ServMeta tryHandleMeta(Payload meta) {
