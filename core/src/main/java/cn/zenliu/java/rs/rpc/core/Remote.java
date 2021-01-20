@@ -5,6 +5,7 @@ import io.netty.buffer.ByteBufUtil;
 import io.rsocket.Payload;
 import io.rsocket.RSocket;
 import lombok.Builder;
+import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
@@ -25,6 +26,7 @@ import java.util.concurrent.CopyOnWriteArraySet;
 @Getter
 @Setter
 @Slf4j
+@EqualsAndHashCode
 public final class Remote implements Serializable {
     static final String NONE_META_NAME = "UNK";
     private static final long serialVersionUID = -7451694137919068872L;
@@ -60,7 +62,7 @@ public final class Remote implements Serializable {
 
     }
 
-    public static Map<String, Object> dumpMeta(Remote x) {
+    public static Map<String, Object> dumpRemote(Remote x) {
         Map<String, Object> map = new HashMap<>();
         map.put("name", x.getName());
         map.put("localServerName", x.server.server);

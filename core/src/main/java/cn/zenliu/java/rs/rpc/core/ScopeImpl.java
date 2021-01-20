@@ -124,12 +124,14 @@ public final class ScopeImpl extends ScopeContext implements Scope, Serializable
     /**
      * Sync Meta data: push meta to all remotes
      */
-    private void syncServMeta() {
-        calcRoutes();
+    private void syncServMeta(Remote... except) {
         if (remotes.isEmpty()) return;
         final Payload meta = servMetaBuilder.get();
         if (debug.get()) log.debug("will sync serv meta {} to remote {}  ", this.routes.get(), remotes);
         remotes.forEach((i, v) -> {
+            for (Remote remote : except) {
+                if (remote == v) return;
+            }
             if (debug.get()) log.debug(" sync serv meta to remote[{}]: {} ", v, this.routes.get());
             pushMeta(meta, v);
         });
@@ -172,14 +174,16 @@ public final class ScopeImpl extends ScopeContext implements Scope, Serializable
             if (remote.weight == 0) remote.setWeight(Math.max(olderRemote.weight, 1));
             log.debug("update meta for remote {}[{}] ", remote, remoteIdx);
             remotes.put(remoteIdx, remote);
-            log.debug("remove and update meta from {}  to {}", oldRemote, remote);
+            log.debug("remove and update meta \n FROM {} \nTO {}", oldRemote, remote);
             updateRemoteService(remote, olderRemote);
+            if (!olderRemote.getName().equals(NONE_META_NAME)) syncServMeta(remote);
         } else {
             log.debug("new meta for remote {}[{}] ", remote, remoteIdx);
             if (remote.idx == -1) remote.setIdx(remoteIdx);
             if (remote.weight == 0) remote.setWeight(1);
             remotes.put(remoteIdx, remote);
             updateRemoteService(remote, oldRemote);
+            syncServMeta(remote);
             // meta.socket.metadataPush(metaBuilder.get()).subscribe();
         }
     }
@@ -301,14 +305,17 @@ public final class ScopeImpl extends ScopeContext implements Scope, Serializable
         final String domain = handlerSignature.substring(0, handlerSignature.indexOf(ProxyUtil.DOMAIN_SPLITTER));
         final Optional<Remote> sockets = findRemoteServiceOptional(domain);
         if (!sockets.isPresent()) {
-            throw new IllegalStateException("not exists service for " + handlerSignature + super.dump());
+            throw new IllegalStateException("not exists service for '" + handlerSignature + "' in " + name + " with " + super.dump());
         }
         final Remote remote = sockets.get();
         if (debug.get()) {
             log.debug("[{}] remote call \n DOMAIN: {} \n ARGUMENTS: {} .", name, handlerSignature, args);
             long ts = System.currentTimeMillis();
             final Payload result = remote.socket.requestResponse(Request.build(handlerSignature, name, args)).block(timeout.get());
-            log.debug("[{}] remote call \n DOMAIN: {} \n ARGUMENTS: {} \n TOTAL COST {}", name, handlerSignature, args, (System.currentTimeMillis() - ts));
+            if (debug.get() && result != null) {
+                final Meta meta = Response.parseMeta(result);
+                log.debug("[{}] remote call \n DOMAIN: {} \n ARGUMENTS: {} \n TOTAL COST {} ms \n META: {}", name, handlerSignature, args, (System.currentTimeMillis() - ts), meta);
+            }
             if (result == null) {
                 log.error("[{}] error to request,got null result. \n DOMAIN:: {} \n ARGUMENTS: {} \n SERVICE {}", name, handlerSignature, args, remote);
                 return Result.error(new IllegalAccessError("error to call remote service " + remote.name + " from " + name));

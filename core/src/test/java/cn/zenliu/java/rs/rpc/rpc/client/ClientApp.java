@@ -19,19 +19,17 @@ public class ClientApp {
     }
 
     public static void run() throws InterruptedException, ExecutionException {
-        final Scope service = Rpc.Global;
+        final Scope service = Rpc.fetchOrCreate("FinalClient", true);
         final ExecutorService executorService = Executors.newCachedThreadPool();
         service.setDebug(true);
-        final TestService bean = executorService.submit(() -> {
-            service.startClient("aClient", Config.Client.builder()
-                .host("localhost").port(7000)
-                .resume(Config.Resume.builder()
-                    .sessionDuration(Duration.ofMinutes(15))
-                    //.retry(Config.Retry.FixedDelay.of(100, Duration.ofDays(10)))
-                    .build())
-                .build());
-            return service.createClientService(TestService.class, null);
-        }).get();
+        service.startClient("aClient", Config.Client.builder()
+            .host("localhost").port(7000)
+            .resume(Config.Resume.builder()
+                .sessionDuration(Duration.ofMinutes(15))
+                //.retry(Config.Retry.FixedDelay.of(100, Duration.ofDays(10)))
+                .build())
+            .build());
+        final TestService bean = service.createClientService(TestService.class, null);
         Thread.sleep(2000);
         log.warn("call {}", bean.getInt());
         log.warn("call {}", bean.getResult(1L));

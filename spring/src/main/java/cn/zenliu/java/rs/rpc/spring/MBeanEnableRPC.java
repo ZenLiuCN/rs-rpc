@@ -73,21 +73,23 @@ public @interface MBeanEnableRPC {
         @ManagedOperationParameter(name = "name", description = "scope简化名称")
         public Map<String, Boolean> localServices(@NotNull String name) {
             final ScopeImpl bean = getBean(name);
-            return Seq.seq(bean.getLocalServers()).map(t -> t.map2(Disposable::isDisposed)).toMap(Tuple2::v1, Tuple2::v2);
+            return Seq.seq(bean.getServers()).map(t -> t.map2(Disposable::isDisposed)).toMap(Tuple2::v1, Tuple2::v2);
         }
 
         @ManagedOperation(description = "查看本地注册的Service")
         @ManagedOperationParameter(name = "name", description = "scope简化名称")
-        public Set<String> localServiceName(@NotNull String name) {
+        public List<String> localServiceName(@NotNull String name) {
             final ScopeImpl bean = getBean(name);
-            return bean.getService();
+            return bean.getServices();
         }
 
         @ManagedOperation(description = "查看远程服务")
         @ManagedOperationParameter(name = "name", description = "scope简化名称")
-        public Map<Integer, Map<String, ?>> remotesRegistry(@NotNull String name) {
+        public Map<String, Map<String, ?>> remotesRegistry(@NotNull String name) {
             final ScopeImpl bean = getBean(name);
-            return Seq.seq(bean.getRemoteRegistry()).map(t -> t.map2(Remote::dumpMeta))
+            return Seq.seq(bean.getRemoteNames()).zipWithIndex()
+                .map(t -> t.map2(i -> bean.getRemotes().get(i.intValue())))
+                .map(t -> t.map2(Remote::dumpRemote))
                 .toMap(Tuple2::v1, Tuple2::v2);
         }
 
@@ -96,7 +98,7 @@ public @interface MBeanEnableRPC {
         public Map<String, List<Map<String, Object>>> remotes(@NotNull String name) {
             final ScopeImpl bean = getBean(name);
             return Seq.seq(bean.getRemoteServices())
-                .map(t -> t.map2(x -> Seq.seq(x).map(Remote::dumpMeta).toList()))
+                .map(t -> t.map1(i -> bean.getRemoteDomains().get(i)).map2(x -> Seq.seq(x).map(Remote::dumpRemote).toList()))
                 .toMap(Tuple2::v1, Tuple2::v2);
         }
 
