@@ -4,12 +4,12 @@
 
 1. communicate base on RSocket (current use version 1.1.0)
 2. serialization use protostuff
-3. use JDK proxy to easy wrap interfaces to RPC service.
+3. use JDK proxy to easy wrap interfaces to RPC remote.
 
 ## core ability
 
 1. binary transmit with protostuff: smaller and faster.
-2. auto service register via simple api.
+2. auto remote register via simple api.
 3. auto routeing is supported.
 4. totally isolation with RSocket Implement, so Maybe it could keep a good & stable API.
 5. a Result object will take any exception from Service to Client side.

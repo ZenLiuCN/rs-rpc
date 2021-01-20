@@ -3,17 +3,26 @@ package cn.zenliu.java.rs.rpc.core;
 import cn.zenliu.java.rs.rpc.api.Result;
 import lombok.SneakyThrows;
 import org.jetbrains.annotations.Nullable;
+import org.jooq.lambda.Seq;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.BiConsumer;
 import java.util.function.Function;
+import java.util.function.Predicate;
 
 
 interface ProxyUtil {
+    char DOMAIN_SPLITTER = '#';
+    char PARAMETER_DOMAIN_SPLITTER = '<';
+    char PARAMETER_SPLITTER = ',';
 
+    static String handlerSignature(Method method, Class<?> service) {
+        return service.getCanonicalName() + DOMAIN_SPLITTER + method.getName() + PARAMETER_DOMAIN_SPLITTER +
+            Seq.of(method.getParameterTypes()).map(Class::getSimpleName).toString(PARAMETER_SPLITTER + "");
+    }
 
     Object[] DEFAULT = new Object[0];
 
@@ -35,23 +44,23 @@ interface ProxyUtil {
                 if (cache.containsKey(idx)) {
                     handle = cache.get(idx);
                 } else {
-                    final String domain = canonicalName + "#" + m.getName() + "<" + m.getParameterCount() + ">";
+                    final String signature = handlerSignature(m, clientKlass);
                     final Function<Object[], Object[]> processor = argumentProcessor == null ? null : argumentProcessor.get(m.getName());
                     if (m.getReturnType() == Void.TYPE) {
                         handle = processor == null ? args -> {
-                            fire.fire(domain, args);
+                            fire.fire(signature, args);
                             return null;
                         } : args -> {
-                            fire.fire(domain, processor.apply(args));
+                            fire.fire(signature, processor.apply(args));
                             return null;
                         };
                     } else if (Result.class.isAssignableFrom(m.getReturnType())) {
-                        handle = processor == null ? args -> request.request(domain, args)
-                            : args -> request.request(domain, processor.apply(args));
+                        handle = processor == null ? args -> request.request(signature, args)
+                            : args -> request.request(signature, processor.apply(args));
 
                     } else {
-                        handle = processor == null ? args -> request.request(domain, args).getOrThrow()
-                            : args -> request.request(domain, processor.apply(args)).getOrThrow();
+                        handle = processor == null ? args -> request.request(signature, args).getOrThrow()
+                            : args -> request.request(signature, processor.apply(args)).getOrThrow();
                     }
                     cache.put(idx, handle);
                 }
@@ -67,13 +76,13 @@ interface ProxyUtil {
 
     @SuppressWarnings("unchecked")
     static ServiceRegister serviceRegisterBuilder(
-        Set<String> services,
-        Map<String, Function<Object[], Result<Object>>> handler
+        Predicate<String> serviceAdder,
+        BiConsumer<String, Function<Object[], Result<Object>>> handlerAdder
     ) {
         return (service, serviceKlass, resultProcessor) -> {
             final String canonicalName = serviceKlass.getCanonicalName();
-            if (!services.add(canonicalName)) {
-                throw new IllegalStateException("service is already registered!" + canonicalName + ";all " + services);
+            if (!serviceAdder.test(canonicalName)) {
+                throw new IllegalStateException("service is already registered!" + canonicalName + ";");
             }
             for (Method method : serviceKlass.getMethods()) {
                 final Function<Object[], Result<Object>> invoker;
@@ -91,7 +100,7 @@ interface ProxyUtil {
                         invoker = args -> Result.wrap(() -> sneakyInvoker(service, method, args));
                     }
                 }
-                handler.put(canonicalName + "#" + method.getName() + "<" + method.getParameterCount() + ">", invoker);
+                handlerAdder.accept(handlerSignature(method, serviceKlass), invoker);
             }
         };
 

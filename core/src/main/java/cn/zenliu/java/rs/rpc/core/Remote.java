@@ -25,10 +25,10 @@ import java.util.concurrent.CopyOnWriteArraySet;
 @Getter
 @Setter
 @Slf4j
-public final class Service implements Serializable {
+public final class Remote implements Serializable {
     static final String NONE_META_NAME = "UNK";
     private static final long serialVersionUID = -7451694137919068872L;
-    public static Comparator<Service> weightComparator = Comparator.comparingInt(Service::getWeight);
+    public static Comparator<Remote> weightComparator = Comparator.comparingInt(Remote::getWeight);
     /**
      * Remote Name
      */
@@ -52,18 +52,18 @@ public final class Service implements Serializable {
      */
     transient int idx = -1;
 
-    public static Service fromMeta(ServMeta r) {
-        return Service.builder()
+    public static Remote fromMeta(ServMeta r) {
+        return Remote.builder()
             .name(r.name)
             .service(r.service == null ? Collections.emptySet() : new HashSet<>(r.service))
             .build();
 
     }
 
-    public static Map<String, Object> dumpMeta(Service x) {
+    public static Map<String, Object> dumpMeta(Remote x) {
         Map<String, Object> map = new HashMap<>();
         map.put("name", x.getName());
-        map.put("localServerName", x.server.serverName);
+        map.put("localServerName", x.server.server);
         map.put("service", x.service);
         map.put("weight", x.getWeight());
         map.put("disposed", x.socket.isDisposed());
@@ -71,24 +71,24 @@ public final class Service implements Serializable {
 
     }
 
-    public Service setServer(@NotNull ServiceRSocket server) {
+    public Remote setServer(@NotNull ServiceRSocket server) {
         this.server = server;
         server.serviceRef.set(this);
         if (socket != null) socket.onClose().doOnTerminate(server::removeRegistry).subscribe();
         return this;
     }
 
-    public Service setSocket(RSocket socket) {
+    public Remote setSocket(RSocket socket) {
         this.socket = socket;
         return this;
     }
 
-    public Service setWeight(int weight) {
+    public Remote setWeight(int weight) {
         this.weight = weight;
         return this;
     }
 
-    public Service setIdx(int idx) {
+    public Remote setIdx(int idx) {
         this.idx = idx;
         return this;
     }
@@ -104,7 +104,7 @@ public final class Service implements Serializable {
         return service.contains(root);
     }
 
-    public Service updateFromMeta(ServMeta meta) {
+    public Remote updateFromMeta(ServMeta meta) {
         if (!this.name.equals(meta.name)) {
             return fromMeta(meta).setServer(server).setSocket(socket).setIdx(idx).setWeight(0);
         }
@@ -115,12 +115,12 @@ public final class Service implements Serializable {
         return this;
     }
 
-    public Service higher() {
+    public Remote higher() {
         weight++;
         return this;
     }
 
-    public Service lower() {
+    public Remote lower() {
         weight--;
         return this;
     }
@@ -133,8 +133,8 @@ public final class Service implements Serializable {
             "\n socket=" + socket +
             "\n resume=" + resume +
             "\n server=" + "ServiceRSocket{" +
-            "serverName='" + server.serverName + '\'' +
-            ", isServer=" + server.server +
+            "serverName='" + server.server + '\'' +
+            ", isServer=" + server.serverMode +
             '}' +
             "\n weight=" + weight +
             "\n idx=" + idx +

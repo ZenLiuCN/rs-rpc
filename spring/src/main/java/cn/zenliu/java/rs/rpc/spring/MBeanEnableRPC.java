@@ -1,8 +1,8 @@
 package cn.zenliu.java.rs.rpc.spring;
 
+import cn.zenliu.java.rs.rpc.core.Remote;
 import cn.zenliu.java.rs.rpc.core.Rpc;
 import cn.zenliu.java.rs.rpc.core.ScopeImpl;
-import cn.zenliu.java.rs.rpc.core.Service;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jooq.lambda.Seq;
@@ -80,14 +80,14 @@ public @interface MBeanEnableRPC {
         @ManagedOperationParameter(name = "name", description = "scope简化名称")
         public Set<String> localServiceName(@NotNull String name) {
             final ScopeImpl bean = getBean(name);
-            return bean.getLocalServices();
+            return bean.getService();
         }
 
         @ManagedOperation(description = "查看远程服务")
         @ManagedOperationParameter(name = "name", description = "scope简化名称")
         public Map<Integer, Map<String, ?>> remotesRegistry(@NotNull String name) {
             final ScopeImpl bean = getBean(name);
-            return Seq.seq(bean.getRemoteRegistry()).map(t -> t.map2(Service::dumpMeta))
+            return Seq.seq(bean.getRemoteRegistry()).map(t -> t.map2(Remote::dumpMeta))
                 .toMap(Tuple2::v1, Tuple2::v2);
         }
 
@@ -96,7 +96,7 @@ public @interface MBeanEnableRPC {
         public Map<String, List<Map<String, Object>>> remotes(@NotNull String name) {
             final ScopeImpl bean = getBean(name);
             return Seq.seq(bean.getRemoteServices())
-                .map(t -> t.map2(x -> Seq.seq(x).map(Service::dumpMeta).toList()))
+                .map(t -> t.map2(x -> Seq.seq(x).map(Remote::dumpMeta).toList()))
                 .toMap(Tuple2::v1, Tuple2::v2);
         }
 
