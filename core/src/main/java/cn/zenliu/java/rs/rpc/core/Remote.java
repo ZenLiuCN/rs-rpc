@@ -54,9 +54,10 @@ public final class Remote implements Serializable {
      */
     transient int idx = -1;
 
-    public static Remote fromMeta(ServMeta r) {
+    public static Remote fromMeta(ServMeta r, boolean resume) {
         return Remote.builder()
             .name(r.name)
+            .resume(resume)
             .service(r.service == null ? Collections.emptySet() : new HashSet<>(r.service))
             .build();
 
@@ -108,7 +109,10 @@ public final class Remote implements Serializable {
 
     public Remote updateFromMeta(ServMeta meta) {
         if (!this.name.equals(meta.name)) {
-            return fromMeta(meta).setServer(server).setSocket(socket).setIdx(idx).setWeight(0);
+            return fromMeta(meta, resume)
+                .setServer(server)
+                .setSocket(socket)
+                .setIdx(idx).setWeight(0);
         }
         synchronized (this) {
             service.clear();
@@ -129,7 +133,7 @@ public final class Remote implements Serializable {
 
     @Override
     public String toString() {
-        return "\n--------------SERVICE-----------------" +
+        return "\n--------------REMOTE-----------------" +
             "\n name='" + name + '\'' +
             "\n service=" + service +
             "\n socket=" + socket +

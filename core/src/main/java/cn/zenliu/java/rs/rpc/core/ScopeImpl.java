@@ -78,37 +78,7 @@ public final class ScopeImpl extends ScopeContext implements Scope, Serializable
     }
 
 
-    //region Service And ServMeta processors
-
-    //region Client And Server Builders
-    static ServerTransport<? extends Closeable> buildTransport(Config.ServerConfig config) {
-        switch (config.getMode()) {
-            case 0:
-                return config.getBindAddress() != null ?
-                    TcpServerTransport.create(config.getBindAddress(),
-                        Objects.requireNonNull(config.getPort(), "must with PORT defined for server mode 0"))
-                    : TcpServerTransport.create(Objects.requireNonNull(config.getPort(), "must with PORT defined for server mode 0"));
-            //TODO how to isolate HTTPServer?
-
-
-        }
-        throw new IllegalStateException("not supported transport mode:" + config.getMode());
-    }
-
-    private static Resume buildResume(Config.ResumeSetting config, boolean client) {
-        final Resume resume = new Resume();
-        if (client) if (config.getRetry() != null) resume.retry(buildRetry(config.getRetry()));
-        if (config.isCleanupStoreOnKeepAlive()) resume.cleanupStoreOnKeepAlive();
-
-        if (client && config.getToken() != null) {
-            final byte[] token = config.getToken().getBytes(StandardCharsets.UTF_8);
-            resume.token(() -> Unpooled.wrappedBuffer(token));
-        }
-        if (config.getSessionDuration() != null) resume.sessionDuration(config.getSessionDuration());
-        if (config.getStreamTimeout() != null) resume.streamTimeout(config.getStreamTimeout());
-        return resume;
-
-    }
+    //region Remote And ServMeta processors
 
     /**
      * process ServiceMeta Request
@@ -132,22 +102,10 @@ public final class ScopeImpl extends ScopeContext implements Scope, Serializable
             for (Remote remote : except) {
                 if (remote == v) return;
             }
-            if (debug.get()) log.debug(" sync serv meta to remote[{}]: {} ", v, this.routes.get());
+            if (debug.get()) log.debug(" [{}] sync serv meta to remote [{}]: {} ", name, v, this.routes.get());
             pushMeta(meta, v);
         });
     }
-
-    /**
-     * current is not support metadata push with Resume enabled!
-     * <b>note:</b>
-     * Should METADATA_PUSH should be part of resumption? #235
-     */
-    private void pushMeta(@Nullable Payload meta, Remote remote) {
-        remote.pushMeta(meta == null ? servMetaBuilder.get() : meta);
-    }
-    //endregion
-
-    //region RSocket Handlers
 
     /**
      * add or update Meta
@@ -176,7 +134,7 @@ public final class ScopeImpl extends ScopeContext implements Scope, Serializable
             remotes.put(remoteIdx, remote);
             log.debug("remove and update meta \n FROM {} \nTO {}", oldRemote, remote);
             updateRemoteService(remote, olderRemote);
-            if (!olderRemote.getName().equals(NONE_META_NAME)) syncServMeta(remote);
+            syncServMeta(remote);
         } else {
             log.debug("new meta for remote {}[{}] ", remote, remoteIdx);
             if (remote.idx == -1) remote.setIdx(remoteIdx);
@@ -187,6 +145,20 @@ public final class ScopeImpl extends ScopeContext implements Scope, Serializable
             // meta.socket.metadataPush(metaBuilder.get()).subscribe();
         }
     }
+
+    /**
+     * current is not support metadata push with Resume enabled!
+     * <b>note:</b>
+     * Should METADATA_PUSH should be part of resumption? #235
+     */
+    private void pushMeta(@Nullable Payload meta, Remote remote) {
+        remote.pushMeta(meta == null ? servMetaBuilder.get() : meta);
+    }
+    //endregion
+
+    //region RSocket Handlers
+
+
 
     /**
      * Process FireAndForgot
@@ -242,7 +214,7 @@ public final class ScopeImpl extends ScopeContext implements Scope, Serializable
         }
         log.warn("[{}] none registered FireAndForget:" + LOG_META, name, meta, remote);
     }
-    //endregion
+
 
     /**
      * RequestResponse
@@ -287,6 +259,7 @@ public final class ScopeImpl extends ScopeContext implements Scope, Serializable
         return result;
     }
 
+    //endregion
     //region Service Call Routeing
     void routeingFNF(String handlerSignature, Object[] args) {
         final String domain = handlerSignature.substring(0, handlerSignature.indexOf(ProxyUtil.DOMAIN_SPLITTER));
@@ -297,15 +270,12 @@ public final class ScopeImpl extends ScopeContext implements Scope, Serializable
         final Remote remote = sockets.get();
         remote.socket.fireAndForget(Request.build(handlerSignature, name, args));
     }
-
-
-    //endregion
-
     Result<Object> routeingRR(String handlerSignature, Object[] args) {
         final String domain = handlerSignature.substring(0, handlerSignature.indexOf(ProxyUtil.DOMAIN_SPLITTER));
         final Optional<Remote> sockets = findRemoteServiceOptional(domain);
         if (!sockets.isPresent()) {
-            throw new IllegalStateException("not exists service for '" + handlerSignature + "' in " + name + " with " + super.dump());
+            log.debug("not found remote service for {}[{}] in {} with  {}", handlerSignature, domain, name, super.remoteDomains);
+            throw new IllegalStateException("not exists service for '" + handlerSignature + "' in " + name);
         }
         final Remote remote = sockets.get();
         if (debug.get()) {
@@ -332,7 +302,7 @@ public final class ScopeImpl extends ScopeContext implements Scope, Serializable
         final Response response = Response.parse(result);
         return response.response;
     }
-
+    //endregion
     /**
      * {@inheritDoc}
      */
@@ -355,6 +325,36 @@ public final class ScopeImpl extends ScopeContext implements Scope, Serializable
     @Override
     public void release() {
         super.purify();
+    }
+
+    //region Client And Server Builders
+    static ServerTransport<? extends Closeable> buildTransport(Config.ServerConfig config) {
+        switch (config.getMode()) {
+            case 0:
+                return config.getBindAddress() != null ?
+                    TcpServerTransport.create(config.getBindAddress(),
+                        Objects.requireNonNull(config.getPort(), "must with PORT defined for server mode 0"))
+                    : TcpServerTransport.create(Objects.requireNonNull(config.getPort(), "must with PORT defined for server mode 0"));
+            //TODO how to isolate HTTPServer?
+
+
+        }
+        throw new IllegalStateException("not supported transport mode:" + config.getMode());
+    }
+
+    private static Resume buildResume(Config.ResumeSetting config, boolean client) {
+        final Resume resume = new Resume();
+        if (client) if (config.getRetry() != null) resume.retry(buildRetry(config.getRetry()));
+        if (config.isCleanupStoreOnKeepAlive()) resume.cleanupStoreOnKeepAlive();
+
+        if (client && config.getToken() != null) {
+            final byte[] token = config.getToken().getBytes(StandardCharsets.UTF_8);
+            resume.token(() -> Unpooled.wrappedBuffer(token));
+        }
+        if (config.getSessionDuration() != null) resume.sessionDuration(config.getSessionDuration());
+        if (config.getStreamTimeout() != null) resume.streamTimeout(config.getStreamTimeout());
+        return resume;
+
     }
 
     static ClientTransport buildTransport(Config.ClientConfig config) {
