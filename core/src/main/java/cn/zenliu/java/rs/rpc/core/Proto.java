@@ -18,24 +18,24 @@ import java.util.regex.Pattern;
 interface Proto {
 
     static byte[] to(Object o) {
-        synchronized (internal.buffer) {
-            Object instance;
-            try {
-                Field h = o.getClass().getSuperclass().getDeclaredField("h");
-                h.setAccessible(true);
-                instance = h.get(o);
-            } catch (Exception ex) {
-                instance = o;
-            }
-            final Object target = instance;
-            final Schema<Object> schema = internal.schemaFrom.apply(target);
-            if (schema == null) throw new IllegalStateException("not found schema for type: " + o.getClass());
-            try {
-                return ProtostuffIOUtil.toByteArray(target, schema, internal.buffer);
-            } finally {
-                internal.buffer.clear();
-            }
+        //  synchronized (internal.buffer) {
+        Object instance;
+        try {
+            Field h = o.getClass().getSuperclass().getDeclaredField("h");
+            h.setAccessible(true);
+            instance = h.get(o);
+        } catch (Exception ex) {
+            instance = o;
         }
+        final Object target = instance;
+        final Schema<Object> schema = internal.schemaFrom.apply(target);
+        if (schema == null) throw new IllegalStateException("not found schema for type: " + o.getClass());
+        try {
+            return ProtostuffIOUtil.toByteArray(target, schema, internal.buffer.get());
+        } finally {
+            internal.buffer.get().clear();
+        }
+        // }
     }
 
     static Object from(byte[] data, String clz) {
@@ -65,7 +65,8 @@ interface Proto {
                 | IdStrategy.MORPH_MAP_INTERFACES
                 | IdStrategy.MORPH_NON_FINAL_POJOS
         );
-        static final LinkedBuffer buffer = LinkedBuffer.allocate(512);
+        //        static final LinkedBuffer buffer = LinkedBuffer.allocate(512);
+        static final ThreadLocal<LinkedBuffer> buffer = ThreadLocal.withInitial(() -> LinkedBuffer.allocate(512));//this may better
         static final Map<String, Schema<Object>> schemaPool = new ConcurrentHashMap<>();
         static final Function<String, Schema<Object>> schemaOf = Sneaky.function(internal::classFromString).andThen(internal::getSchema);
         static final Function<Object, Schema<Object>> schemaFrom = Sneaky.function(Object::getClass).andThen(internal::getSchema);
