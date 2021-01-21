@@ -9,6 +9,7 @@ import lombok.ToString;
 import java.io.Serializable;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -29,11 +30,12 @@ public class ServMeta implements Serializable {
      * Supported Service Domain (with out methods)
      */
     @Builder.Default final List<String> service = new ArrayList<>();
+    @Builder.Default final Set<String> known = new HashSet<>();
 
-    public static Payload build(String name, Set<String> service) {
+    public static Payload build(String name, Set<String> service, Set<String> known) {
         return DefaultPayload.create(
             DefaultPayload.EMPTY_BUFFER,
-            ByteBuffer.wrap(Proto.to(ServMeta.builder().name(name).service(new ArrayList<>(service)).build()))
+            ByteBuffer.wrap(Proto.to(ServMeta.builder().name(name).service(new ArrayList<>(service)).known(new HashSet<>(known)).build()))
         );
     }
 

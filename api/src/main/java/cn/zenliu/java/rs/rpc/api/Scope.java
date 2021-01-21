@@ -38,6 +38,8 @@ public interface Scope {
      */
     void setDebug(boolean debug);
 
+    void setTrace(boolean trace);
+
     /**
      * create a new RSocket Server
      *

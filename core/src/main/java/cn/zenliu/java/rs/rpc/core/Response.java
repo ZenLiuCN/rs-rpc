@@ -27,7 +27,7 @@ final class Response {
     final Result<Object> response;
 
     public static Payload build(Meta meta, String name, Result<Object> result) {
-        return DefaultPayload.create(Proto.to(Response.builder().response(result).build()), Proto.to(meta.addTrace(name)));
+        return DefaultPayload.create(Proto.to(Response.builder().response(result).build()), Proto.to(name != null ? meta.addTrace(name) : meta));
     }
 
     public static Meta parseMeta(Payload p) {

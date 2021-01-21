@@ -13,7 +13,6 @@ import org.jetbrains.annotations.NotNull;
 
 import java.io.Serializable;
 import java.util.*;
-import java.util.concurrent.CopyOnWriteArraySet;
 
 /**
  * Service Meta is Presence a Connection between Remote and Local.
@@ -35,7 +34,7 @@ public final class Remote implements Serializable {
      * Remote Name
      */
     @Builder.Default final String name = NONE_META_NAME;
-    @Builder.Default final Set<String> service = new CopyOnWriteArraySet<>();
+    @Builder.Default final Set<String> service = new HashSet<>();
     @Builder.Default final boolean resume = false;
     /**
      * Remote RSocket
@@ -48,7 +47,7 @@ public final class Remote implements Serializable {
     /**
      * weight to do load balance or something else
      */
-    transient int weight = 0;
+    transient int weight = 1;
     /**
      * remote index for faster location
      */
@@ -58,7 +57,7 @@ public final class Remote implements Serializable {
         return Remote.builder()
             .name(r.name)
             .resume(resume)
-            .service(r.service == null ? Collections.emptySet() : new HashSet<>(r.service))
+            .service(r.service == null || r.service.isEmpty() ? Collections.emptySet() : new HashSet<>(r.service))
             .build();
 
     }
@@ -66,7 +65,7 @@ public final class Remote implements Serializable {
     public static Map<String, Object> dumpRemote(Remote x) {
         Map<String, Object> map = new HashMap<>();
         map.put("name", x.getName());
-        map.put("localServerName", x.server.server);
+        map.put("server", x.server.server);
         map.put("service", x.service);
         map.put("weight", x.getWeight());
         map.put("disposed", x.socket.isDisposed());
@@ -108,20 +107,12 @@ public final class Remote implements Serializable {
     }
 
     public Remote updateFromMeta(ServMeta meta) {
-        if (!this.name.equals(meta.name)) {
-            return fromMeta(meta, resume)
-                .setServer(server)
-                .setSocket(socket)
-                .setIdx(idx).setWeight(0);
-        }
-        if (meta.service != null) {
-            synchronized (this) {
-                service.clear();
-                service.addAll(meta.service);
-            }
-        }
-
-        return this;
+        //always a new one for match remove logic
+        return fromMeta(meta, resume)
+            .setServer(server)
+            .setSocket(socket)
+            .setIdx(idx)
+            .setWeight(1);
     }
 
     public Remote higher() {
@@ -152,10 +143,10 @@ public final class Remote implements Serializable {
 
     public void pushMeta(Payload meta) {
         if (!resume) {
-            log.debug("service {} will push meta {} via MetadataPush", name, dumpMeta(meta));
+            log.debug("REMOTE {} will push Serv meta {} \n via MetadataPush to {}", server.server, dumpMeta(meta), name);
             socket.metadataPush(meta).subscribe();
         } else {
-            log.debug("service {} will push meta {} via FNF", name, dumpMeta(meta));
+            log.debug("REMOTE {} will push Serv meta {} \n via FNF to {}", server.server, dumpMeta(meta), name);
             socket.fireAndForget(meta).subscribe();
         }
     }

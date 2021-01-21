@@ -21,7 +21,8 @@ public class ClientApp {
     public static void run() throws InterruptedException, ExecutionException {
         final Scope service = Rpc.fetchOrCreate("FinalClient", true);
         final ExecutorService executorService = Executors.newCachedThreadPool();
-        service.setDebug(true);
+        service.setDebug(false);
+        service.setTrace(true);
         service.startClient("aClient", Config.Client.builder()
             .host("localhost").port(7000)
             .resume(Config.Resume.builder()
@@ -30,10 +31,11 @@ public class ClientApp {
                 .build())
             .build());
         final TestService bean = service.createClientService(TestService.class, null);
-        Thread.sleep(5000);
-        log.warn("call {}", bean.getInt());
-        log.warn("call {}", bean.getResult(1L));
-        log.warn("call {}", bean.getResult(-1L));
+        Thread.sleep(500);//wait for sync
+        log.error("call getInt {}", bean.getInt());
+        log.warn("call getResult {}", bean.getResult(1L));
+        log.warn("call getResult {}", bean.getResult(-1L));
+
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             service.release();
             executorService.shutdown();

@@ -20,7 +20,8 @@ public class Meta {
     /**
      * domain: ServiceClassCanonicalName#Method<MethodArgumentCount>
      */
-    final String domain;
+    final String sign;
+    @Builder.Default final boolean track = false;
     @Builder.Default final String uuid = UUID.randomUUID().toString();
     /**
      * trace information: (timestamp,nodeScopeName)
@@ -35,7 +36,7 @@ public class Meta {
     @Override
     public String toString() {
         return "\n--------------REQUEST META----------------" +
-            "\n domain=" + domain +
+            "\n domain=" + sign +
             "\n uuid=" + uuid +
             "\n trace=" + trace +
             "\n----------------------------------------";

@@ -2,7 +2,6 @@ package cn.zenliu.java.rs.rpc.rpc;
 
 import cn.zenliu.java.rs.rpc.rpc.client.ClientApp;
 import cn.zenliu.java.rs.rpc.rpc.client.ClientProxyApp;
-import cn.zenliu.java.rs.rpc.rpc.server.ServerApp;
 import cn.zenliu.java.rs.rpc.rpc.server.ServerProxyApp;
 import lombok.extern.slf4j.Slf4j;
 
@@ -21,14 +20,12 @@ public class TestLauncher {
 
     static void launcherProxy() throws InterruptedException, ExecutionException {
         ServerProxyApp.run();
-        Thread.sleep(500);
         ClientProxyApp.run();
-        Thread.sleep(1500);
         ClientApp.run();
     }
 
-    static void launcherNormal() throws InterruptedException, ExecutionException {
+/*    static void launcherNormal() throws InterruptedException, ExecutionException {
         ServerApp.run();
         ClientApp.run();
-    }
+    }*/
 }

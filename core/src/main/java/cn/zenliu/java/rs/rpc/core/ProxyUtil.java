@@ -48,19 +48,19 @@ interface ProxyUtil {
                     final Function<Object[], Object[]> processor = argumentProcessor == null ? null : argumentProcessor.get(m.getName());
                     if (m.getReturnType() == Void.TYPE) {
                         handle = processor == null ? args -> {
-                            fire.fire(signature, args);
+                            fire.fnf(signature, args);
                             return null;
                         } : args -> {
-                            fire.fire(signature, processor.apply(args));
+                            fire.fnf(signature, processor.apply(args));
                             return null;
                         };
                     } else if (Result.class.isAssignableFrom(m.getReturnType())) {
-                        handle = processor == null ? args -> request.request(signature, args)
-                            : args -> request.request(signature, processor.apply(args));
+                        handle = processor == null ? args -> request.rr(signature, args)
+                            : args -> request.rr(signature, processor.apply(args));
 
                     } else {
-                        handle = processor == null ? args -> request.request(signature, args).getOrThrow()
-                            : args -> request.request(signature, processor.apply(args)).getOrThrow();
+                        handle = processor == null ? args -> request.rr(signature, args).getOrThrow()
+                            : args -> request.rr(signature, processor.apply(args)).getOrThrow();
                     }
                     cache.put(idx, handle);
                 }
@@ -109,12 +109,12 @@ interface ProxyUtil {
 
     @FunctionalInterface
     interface doAndForget {
-        void fire(String domain, Object[] args);
+        void fnf(String domain, Object[] args);
     }
 
     @FunctionalInterface
     interface doForResponse {
-        Result<Object> request(String domain, Object[] args);
+        Result<Object> rr(String domain, Object[] args);
     }
 
     @FunctionalInterface

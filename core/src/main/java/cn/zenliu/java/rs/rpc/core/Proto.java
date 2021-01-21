@@ -18,21 +18,23 @@ import java.util.regex.Pattern;
 interface Proto {
 
     static byte[] to(Object o) {
-        Object instance;
-        try {
-            Field h = o.getClass().getSuperclass().getDeclaredField("h");
-            h.setAccessible(true);
-            instance = h.get(o);
-        } catch (Exception ex) {
-            instance = o;
-        }
-        final Object target = instance;
-        final Schema<Object> schema = internal.schemaFrom.apply(target);
-        if (schema == null) throw new IllegalStateException("not found schema for type: " + o.getClass());
-        try {
-            return ProtostuffIOUtil.toByteArray(target, schema, internal.buffer);
-        } finally {
-            internal.buffer.clear();
+        synchronized (internal.buffer) {
+            Object instance;
+            try {
+                Field h = o.getClass().getSuperclass().getDeclaredField("h");
+                h.setAccessible(true);
+                instance = h.get(o);
+            } catch (Exception ex) {
+                instance = o;
+            }
+            final Object target = instance;
+            final Schema<Object> schema = internal.schemaFrom.apply(target);
+            if (schema == null) throw new IllegalStateException("not found schema for type: " + o.getClass());
+            try {
+                return ProtostuffIOUtil.toByteArray(target, schema, internal.buffer);
+            } finally {
+                internal.buffer.clear();
+            }
         }
     }
 

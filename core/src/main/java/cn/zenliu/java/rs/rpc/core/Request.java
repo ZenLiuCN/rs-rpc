@@ -30,12 +30,12 @@ class Request {
      */
     final Object[] arguments;
 
-    public static Payload build(String domain, String scope, Object[] arguments) {
+    public static Payload build(String domain, String scope, Object[] arguments, boolean trace) {
         final Request request = Request.builder()
             .arguments(arguments)
             .build();
-        val meta = Meta.builder().domain(domain).build();
-        meta.addTrace(scope);
+        val meta = Meta.builder().sign(domain).build();
+        if (trace) meta.addTrace(scope);
         return DefaultPayload.create(Proto.to(request), Proto.to(meta));
     }
 
@@ -53,7 +53,9 @@ class Request {
 
     public static Payload updateMeta(Payload p, Meta meta, @Nullable String name) {
         if (name != null) meta.addTrace(name);
-        return DefaultPayload.create(ByteBuffer.wrap(Proto.to(meta)), p.sliceData().nioBuffer());
+        return DefaultPayload.create(
+            p.sliceData().nioBuffer(),
+            ByteBuffer.wrap(Proto.to(meta)));
     }
 
     @Override

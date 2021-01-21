@@ -19,8 +19,10 @@ public class ClientProxyApp {
 
     public static void run() throws InterruptedException, ExecutionException {
         new Thread(() -> {
-            final Scope service = Rpc.newScope("aProxy", true);
-            service.setDebug(true);
+            final Scope service = Rpc.newScope("aProxy", false);
+            service.setDebug(false);
+            service.setTrace(true);
+            service.registerService(new TestServiceImpl(), TestService.class, null);
             service.startClient("aProxyClient", Config.Client.builder()
                 .host("localhost").port(7000)
                 .resume(Config.Resume.builder()
@@ -28,7 +30,6 @@ public class ClientProxyApp {
                     //.retry(Config.Retry.FixedDelay.of(100, Duration.ofDays(10)))
                     .build())
                 .build());
-            service.registerService(new TestServiceImpl(), TestService.class, null);
             Runtime.getRuntime().addShutdownHook(new Thread(service::release));
         }).start();
 
