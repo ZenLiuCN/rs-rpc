@@ -21,6 +21,9 @@ public class Meta {
      * domain: ServiceClassCanonicalName#Method<MethodArgumentCount>
      */
     final String sign;
+
+    final String from;
+    @Builder.Default final long fromTick = Ticks.fromNowUTC();
     @Builder.Default final boolean track = false;
     @Builder.Default final String uuid = UUID.randomUUID().toString();
     /**
@@ -36,7 +39,10 @@ public class Meta {
     @Override
     public String toString() {
         return "\n--------------REQUEST META----------------" +
-            "\n domain=" + sign +
+            "\n sign=" + sign +
+            "\n from=" + from +
+            "\n fromTick=" + fromTick +
+            "\n track=" + track +
             "\n uuid=" + uuid +
             "\n trace=" + trace +
             "\n----------------------------------------";

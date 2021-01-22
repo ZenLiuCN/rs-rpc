@@ -75,7 +75,7 @@ public final class Remote implements Serializable {
 
     public Remote setServer(@NotNull ServiceRSocket server) {
         this.server = server;
-        server.serviceRef.set(this);
+        server.remoteRef.set(this);
         if (socket != null) socket.onClose().doOnTerminate(server::removeRegistry).subscribe();
         return this;
     }
@@ -141,7 +141,7 @@ public final class Remote implements Serializable {
             "\n-----------------------------------";
     }
 
-    public void pushMeta(Payload meta) {
+    public void pushServMeta(Payload meta) {
         if (!resume) {
             log.debug("REMOTE {} will push Serv meta {} \n via MetadataPush to {}", server.server, dumpMeta(meta), name);
             socket.metadataPush(meta).subscribe();
