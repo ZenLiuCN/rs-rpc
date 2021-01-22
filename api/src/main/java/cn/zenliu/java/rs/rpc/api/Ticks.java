@@ -1,5 +1,6 @@
 package cn.zenliu.java.rs.rpc.api;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.AbstractMap.SimpleEntry;
 import java.util.Map;
@@ -47,7 +48,25 @@ public interface Ticks {
         return tick | (isLocal ? KindLocal : KindUtc);
     }
 
+    static long fromUTC(Instant instant) {
+        long nano = instant.getNano() / 100;
+        long sec = (instant.getEpochSecond() - base) * tickPerSec;
+        long tick = sec + nano;
+        return tick | KindUtc;
+    }
+
     static long fromNowUTC() {
         return from(Instant.now(), false);
+    }
+
+    static Duration between(long firstUTC, long secondUTC) {
+        final Instant f = from(firstUTC).getKey();
+        final Instant s = from(secondUTC).getKey();
+        return Duration.between(f, s);
+    }
+
+    static Duration betweenNow(Long firstUTC) {
+        final Instant f = from(firstUTC).getKey();
+        return Duration.between(f, Instant.now());
     }
 }

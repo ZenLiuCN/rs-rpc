@@ -3,6 +3,7 @@ package cn.zenliu.java.rs.rpc.core;
 import cn.zenliu.java.rs.rpc.api.Config;
 import cn.zenliu.java.rs.rpc.api.Result;
 import cn.zenliu.java.rs.rpc.api.Scope;
+import cn.zenliu.java.rs.rpc.api.Ticks;
 import cn.zenliu.java.rs.rpc.core.ProxyUtil.ClientCreator;
 import cn.zenliu.java.rs.rpc.core.ProxyUtil.ServiceRegister;
 import io.netty.buffer.ByteBufUtil;
@@ -95,6 +96,8 @@ public final class ScopeImpl extends ScopeContextImpl implements Scope, Routeing
         onDebug(log -> log.debug("[{}] begin to process FireAndForget:" + LOG_META, name, meta, remote));
         final Function<Object[], Result<Object>> handler = findHandler(meta.sign);
         if (handler != null) {
+
+
             final Request request = Request.parseRequest(p);
             onDebugWithTimer(
                 log -> log.debug("[{}] process FireAndForget:" + LOG_META_REQUEST, name, meta, request, remote)
@@ -102,6 +105,11 @@ public final class ScopeImpl extends ScopeContextImpl implements Scope, Routeing
                 , log -> {
                     try {
                         handler.apply(request.arguments);
+                        if ((debug.get() || trace.get())) {
+                            final Long keys = meta.trace.keySet().stream().sorted().findFirst().get();
+                            log.info("[{}] remote trace \n META: {} \n TIME COST: {} μs", name, meta, Ticks.betweenNow(keys).getNano() / 1000.0);
+
+                        }
                     } catch (Exception e) {
                         log.error("[{}] error to process FireAndForget:" + LOG_META_REQUEST, name, meta, request, remote, e);
                     }
@@ -174,7 +182,7 @@ public final class ScopeImpl extends ScopeContextImpl implements Scope, Routeing
         if (null == remote) {
             throw new IllegalStateException("not exists service for " + sign);
         }
-        remote.socket.fireAndForget(Request.build(sign, name, args, debug.get() || trace.get()));
+        remote.socket.fireAndForget(Request.build(sign, name, args, true)); //requester always in trace
     }
 
     Result<Object> routeingRR(String sign, Object[] args) {
@@ -189,10 +197,13 @@ public final class ScopeImpl extends ScopeContextImpl implements Scope, Routeing
             log -> log.debug("[{}] remote call \n DOMAIN: {} \n ARGUMENTS: {} .", name, sign, args)
             , null
             , log -> {
-                final Payload result = remote.socket.requestResponse(Request.build(sign, name, args, debug.get() || trace.get())).block(timeout.get());
+                final Payload result = remote.socket.requestResponse(Request.build(sign, name, args, true))  //requester always in trace
+                    .block(timeout.get());
                 if ((debug.get() || trace.get()) && result != null) {
                     final Meta meta = Response.parseMeta(result);
-                    log.info("[{}] remote trace \n DOMAIN: {} \n ARGUMENTS: {} \n META: {}", name, sign, args, meta);
+                    final long[] keys = meta.trace.keySet().stream().mapToLong(x -> x).sorted().toArray();
+                    log.info("[{}] remote trace \n DOMAIN: {} \n ARGUMENTS: {} \n META: {} \n TIME COST: {} μs", name, sign, args, meta, Ticks.between(keys[0], keys[keys.length - 1]).getNano() / 1000.0);
+
                 }
                 if (result == null) {
                     log.error("[{}] error to request,got null result. \n DOMAIN:: {} \n ARGUMENTS: {} \n SERVICE {}", name, sign, args, remote);
