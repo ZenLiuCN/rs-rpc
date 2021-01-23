@@ -7,7 +7,6 @@ import org.jooq.lambda.tuple.Tuple;
 import org.jooq.lambda.tuple.Tuple2;
 import reactor.core.publisher.Mono;
 
-import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
 
@@ -58,14 +57,14 @@ public interface FunctorPayload {
 
     static Mono<Void> metaPushHandler(Payload p, Remote r, Consumer<Tuple2<ServMeta, Remote>> servMetaHandler) {
         return Mono.just(p)
-            .map(FunctorPayload::maybeServMeta)
+            .map(FunctorPayload::maybeServMeta)//todo
             .flatMap(x -> {
                 servMetaHandler.accept(Tuple.tuple(x, r));
                 return Mono.empty();
             });
     }
 
-    static Mono<Void> fnfHandler(Payload p, Remote r, Consumer<Tuple2<@NotNull ServMeta, @NotNull Remote>> servMetaHandler, BiConsumer<Tuple2<Meta, Payload>, Remote> fnfHandler) {
+    static Mono<Void> fnfHandler(Payload p, Remote r, Consumer<Tuple2<@NotNull ServMeta, @NotNull Remote>> servMetaHandler, BiFunction<Tuple2<Meta, Payload>, Remote, Mono<Void>> fnfHandler) {
         if (p.data().capacity() == 0) { // a meta push must without data
             final ServMeta servMeta = maybeServMeta(p);
             if (servMeta != null) {
@@ -75,10 +74,7 @@ public interface FunctorPayload {
         }
         return Mono.just(p)
             .map(FunctorPayload::justMeta)
-            .flatMap(x -> {
-                fnfHandler.accept(x, r);
-                return Mono.empty();
-            });
+            .flatMap(x -> fnfHandler.apply(x, r));
     }
 
     static Mono<Payload> rrHandler(Payload p, Remote r, BiFunction<Tuple2<Meta, Payload>, Remote, Mono<Payload>> rrHandler) {

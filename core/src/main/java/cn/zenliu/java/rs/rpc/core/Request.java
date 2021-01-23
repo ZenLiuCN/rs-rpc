@@ -47,15 +47,15 @@ class Request {
         }
     }
 
-    public static Meta parseMeta(Payload p) {
-        return Proto.from(ByteBufUtil.getBytes(p.sliceMetadata()), Meta.class);
-    }
-
     public static Payload updateMeta(Payload p, Meta meta, @Nullable String name) {
         if (name != null) meta.addTrace(name);
-        return DefaultPayload.create(
-            p.sliceData().nioBuffer(),
-            ByteBuffer.wrap(Proto.to(meta)));
+        try {
+            return DefaultPayload.create(
+                p.sliceData().nioBuffer(),
+                ByteBuffer.wrap(Proto.to(meta)));
+        } finally {
+            p.release();
+        }
     }
 
     @Override

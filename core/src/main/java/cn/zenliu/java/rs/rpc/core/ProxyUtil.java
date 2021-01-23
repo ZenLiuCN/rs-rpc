@@ -2,8 +2,10 @@ package cn.zenliu.java.rs.rpc.core;
 
 import cn.zenliu.java.rs.rpc.api.Result;
 import lombok.SneakyThrows;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jooq.lambda.Seq;
+import reactor.core.publisher.Mono;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
@@ -53,25 +55,27 @@ interface ProxyUtil {
                     if (m.getReturnType() == Void.TYPE) {
                         handle = useFNF
                             ? (processor == null ? args -> {
-                            fire.fnf(signature, args);
+                            fire.fnf(signature, args).subscribe();
                             return null;
                         } : args -> {
-                            fire.fnf(signature, processor.apply(args));
+                            fire.fnf(signature, processor.apply(args)).subscribe();
                             return null;
                         }) : (processor == null ? args -> {
-                            request.rr(signature, args);
+                            request.rr(signature, args).block(ctx.getTimeout().get());
                             return null;
                         } : args -> {
-                            request.rr(signature, processor.apply(args));
+                            request.rr(signature, processor.apply(args)).block(ctx.getTimeout().get());
                             return null;
                         });
                     } else if (Result.class.isAssignableFrom(m.getReturnType())) {
+                        handle = processor == null ? args -> request.rr(signature, args).block(ctx.getTimeout().get())
+                            : args -> request.rr(signature, processor.apply(args)).block(ctx.getTimeout().get());
+                    } else if (Mono.class.isAssignableFrom(m.getReturnType())) {
                         handle = processor == null ? args -> request.rr(signature, args)
                             : args -> request.rr(signature, processor.apply(args));
-
                     } else {
-                        handle = processor == null ? args -> request.rr(signature, args).getOrThrow()
-                            : args -> request.rr(signature, processor.apply(args)).getOrThrow();
+                        handle = processor == null ? args -> request.rr(signature, args).block(ctx.getTimeout().get()).getOrThrow()
+                            : args -> request.rr(signature, processor.apply(args)).block(ctx.getTimeout().get()).getOrThrow();
                     }
                     cache.put(idx, handle);
                 }
@@ -121,13 +125,14 @@ interface ProxyUtil {
 
     @FunctionalInterface
     interface doAndForget {
-        void fnf(String domain, Object[] args);
+        Mono<Void> fnf(String domain, Object[] args);
     }
 
     @FunctionalInterface
     interface doForResponse {
-        Result<Object> rr(String domain, Object[] args);
+        Mono<@NotNull Result<Object>> rr(String domain, Object[] args);
     }
+
 
     @FunctionalInterface
     interface ServiceRegister {

@@ -9,6 +9,7 @@ import reactor.core.publisher.Mono;
 
 import java.util.function.Function;
 
+import static cn.zenliu.java.rs.rpc.core.FunctorPayload.mustRequest;
 import static cn.zenliu.java.rs.rpc.core.ProxyUtil.domainOf;
 
 /**
@@ -27,12 +28,12 @@ public interface ContextScope extends ContextRoutes {
 
     }
 
-    default void onFNF(@NotNull Tuple2<Meta, Payload> in, Remote remote) {
+    default Mono<Void> onFNF(@NotNull Tuple2<Meta, Payload> in, Remote remote) {
         final Meta meta = in.v1;
         onDebug("begin to process FireAndForget:" + LOG_META, meta, remote);
         final Function<Object[], Result<Object>> handler = findHandler(meta.sign);
         if (handler != null) {
-            final Request request = Request.parseRequest(in.v2);
+            final Request request = mustRequest(in.v2);
             onDebugWithTimer(
                 x -> x.debug("process FireAndForget:" + LOG_META_REQUEST, meta, request, remote)
                 , null
@@ -46,18 +47,18 @@ public interface ContextScope extends ContextRoutes {
                         x.error("error to process FireAndForget:" + LOG_META_REQUEST, meta, request, remote, e);
                     }
                 });
-            return;
+            return Mono.empty();
         } else if (isRoute()) {
             final String domain = domainOf(meta.sign);
             final Remote service = findRemoteService(domain);
             if (service != null) {
                 onDebugElse(x -> x.debug("routeing FireAndForget:" + LOG_META + "\n NEXT:{}", meta, remote, service)
                     , x -> x.debug("routeing FireAndForget:" + LOG_META + "\n NEXT:{}", meta, remote.name, service.name));
-                service.socket.fireAndForget(Request.updateMeta(in.v2, meta, meta.trace ? getName() : getNameOnTrace())).subscribe(); //should subscribe
-                return;
+                return service.socket.fireAndForget(Request.updateMeta(in.v2, meta, meta.trace ? getName() : getNameOnTrace()));
             }
         }
         error("none registered FireAndForget:" + LOG_META, meta, remote);
+        return Mono.empty();
     }
 
     /**
@@ -73,7 +74,7 @@ public interface ContextScope extends ContextRoutes {
         onDebug("process RequestAndResponse:" + LOG_META, meta, remote);
         final Function<Object[], Result<Object>> handler = findHandler(meta.sign);
         if (handler != null) {
-            final Request request = Request.parseRequest(p);
+            final Request request = mustRequest(p);
             return onDebugWithTimerReturns(
                 x -> x.debug("process RequestAndResponse:" + LOG_META_REQUEST, meta, request, remote)
                 , null
@@ -113,7 +114,7 @@ public interface ContextScope extends ContextRoutes {
      * @param args args
      * @return Result
      */
-    default Result<Object> routeingRR(String sign, Object[] args) {
+    default Mono<Result<Object>> routeingRR(String sign, Object[] args) {
         final String domain = domainOf(sign);
         final Remote remote = findRemoteService(domain);
         if (remote == null) {
@@ -123,22 +124,20 @@ public interface ContextScope extends ContextRoutes {
         return onDebugWithTimerReturns(
             x -> x.debug("remote call \n DOMAIN: {} \n ARGUMENTS: {} .", sign, args)
             , null
-            , x -> {
-                final Payload result = remote.socket.requestResponse(Request.build(sign, getName(), args, getTrace().get()))
-                    .block(getTimeout().get());
-                if ((getDebug().get() || getTrace().get()) && result != null) {
-                    final Meta meta = Response.parseMeta(result);
-                    x.info("remote trace \n ARGUMENTS: {} \n META: {} \n  COST: SEND {} ,TOTAL {}", args, meta, meta.cost(), meta.costNow());
-
-                }
-                if (result == null) {
-                    x.error("error to request,got null result. \n DOMAIN:: {} \n ARGUMENTS: {} \n SERVICE {}", sign, args, remote);
-                    return Result.error(new IllegalAccessError("error to call remote service " + remote.name + " from " + getName()));
-                }
-                final Response response = Response.parse(result);
-                x.debug("remote call \n DOMAIN: {} \n ARGUMENTS: {} \n RESULT: {} \n SERVICE:{}", sign, args, response, remote);
-                return response.response;
-            }
+            , x -> remote.socket.requestResponse(Request.build(sign, getName(), args, getTrace().get()))
+                .map(result -> {
+                    if ((getDebug().get() || getTrace().get()) && result != null) {
+                        final Meta meta = Response.parseMeta(result);
+                        x.info("remote trace \n ARGUMENTS: {} \n META: {} \n  COST: SEND {} ,TOTAL {}", args, meta, meta.cost(), meta.costNow());
+                    }
+                    if (result == null) {
+                        x.error("error to request,got null result. \n DOMAIN:: {} \n ARGUMENTS: {} \n SERVICE {}", sign, args, remote);
+                        return Result.error(new IllegalAccessError("error to call remote service " + remote.name + " from " + getName()));
+                    }
+                    final Response response = Response.parse(result);
+                    x.debug("remote call \n DOMAIN: {} \n ARGUMENTS: {} \n RESULT: {} \n SERVICE:{}", sign, args, response, remote);
+                    return response.response;
+                })
         );
     }
 
@@ -148,15 +147,14 @@ public interface ContextScope extends ContextRoutes {
      * @param sign handler signature
      * @param args args
      */
-    default void routeingFNF(String sign, Object[] args) {
+    default Mono<Void> routeingFNF(String sign, Object[] args) {
         final String domain = domainOf(sign);
         final Remote remote = findRemoteService(domain);
         if (null == remote) {
             throw new IllegalStateException("not exists service for " + sign);
         }
         debug("do FNF with {} ,{} =>{}", sign, args, remote);
-        remote.socket.fireAndForget(Request.build(sign, getName(), args, getTrace().get())).subscribe(); //should subscribe to real fire
-        debug("after FNF with {} ,{} =>{}", sign, args, remote);
+        return remote.socket.fireAndForget(Request.build(sign, getName(), args, getTrace().get()));
     }
 
 }
