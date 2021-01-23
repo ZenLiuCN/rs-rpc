@@ -25,8 +25,9 @@ import static org.jooq.lambda.tuple.Tuple.tuple;
  * @apiNote Delegator
  * @since 2021-01-12
  */
+
 @ToString
-public final class Delegator {
+public final class Delegator implements InvocationHandler {
     /**
      * Copier Cache
      */
@@ -40,7 +41,7 @@ public final class Delegator {
      */
     public final Map<String, Object> values;
     private Constructor<MethodHandles.Lookup> constructor;
-
+    transient Object[] result = {new Object()};
     Delegator(Class<?> type) {
         this.type = type;
         this.values = new HashMap<>();
@@ -138,40 +139,8 @@ public final class Delegator {
      */
     @SuppressWarnings("unchecked")
     public <T> T proxy(Class<T> clz) {
-        final Object[] result = new Object[1];
-        final InvocationHandler handler = new InvocationHandler() {
-            @SuppressWarnings("null")
-            @Override
-            public Object invoke(Object proxy, Method method, Object[] args) {
-                String name = method.getName();
-                int length = (args == null ? 0 : args.length);
-                if (length == 0 && name.startsWith("is")) {
-                    return values.get(name.substring(2));
-                } else if (length == 0 && name.startsWith("get")) {
-                    return values.get(name.substring(3));
-                } else if (length == 1 && name.startsWith("set")) {
-                    return values.put(name.substring(3), args);
-                } else if (length == 0 && name.equals("toString")) {
-                    return type + values.toString();
-                } else if (method.isDefault()) {
-                    try {
-                        if (constructor == null)
-                            constructor = accessible(MethodHandles.Lookup.class.getDeclaredConstructor(Class.class, int.class));
-                        Class<?> declaringClass = method.getDeclaringClass();
-                        return constructor
-                            .newInstance(declaringClass, MethodHandles.Lookup.PRIVATE)
-                            .unreflectSpecial(method, declaringClass)
-                            .bindTo(result[0])
-                            .invokeWithArguments(args);
-                    } catch (Throwable e) {
-                        throw new IllegalStateException("Cannot invoke default method", e);
-                    }
-                } else {
-                    throw new IllegalStateException("not accepted call:" + name);
-                }
-            }
-        };
-        result[0] = Proxy.newProxyInstance(clz.getClassLoader(), new Class[]{clz}, handler);
+        if (result == null) result = new Object[1];
+        result[0] = Proxy.newProxyInstance(clz.getClassLoader(), new Class[]{clz}, this);
         return (T) result[0];
     }
 
@@ -181,6 +150,40 @@ public final class Delegator {
     @SneakyThrows
     public Object delegate() {
         return proxy(type);
+    }
+
+    @Override
+    public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+        String name = method.getName();
+        int length = (args == null ? 0 : args.length);
+        if (length == 0 && name.startsWith("is")) {
+            return values.get(name.substring(2));
+        } else if (length == 0 && name.startsWith("get")) {
+            return values.get(name.substring(3));
+        } else if (length == 1 && name.startsWith("set")) {
+            return values.put(name.substring(3), args);
+        } else if (length == 0 && name.equals("toString")) {
+            return type + values.toString();
+        } else if (method.isDefault()) {
+            if (result == null) {
+                result = new Object[1];
+                result[0] = Proxy.newProxyInstance(type.getClassLoader(), new Class[]{type}, this);
+            }
+            try {
+                if (constructor == null)
+                    constructor = accessible(MethodHandles.Lookup.class.getDeclaredConstructor(Class.class, int.class));
+                Class<?> declaringClass = method.getDeclaringClass();
+                return constructor
+                    .newInstance(declaringClass, MethodHandles.Lookup.PRIVATE)
+                    .unreflectSpecial(method, declaringClass)
+                    .bindTo(result[0])
+                    .invokeWithArguments(args);
+            } catch (Throwable e) {
+                throw new IllegalStateException("Cannot invoke default method", e);
+            }
+        } else {
+            throw new IllegalStateException("not accepted call:" + name);
+        }
     }
 }
 

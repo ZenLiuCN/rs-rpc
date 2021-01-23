@@ -1,5 +1,6 @@
 package cn.zenliu.java.rs.rpc.core;
 
+import cn.zenliu.java.rs.rpc.api.Delegator;
 import io.protostuff.LinkedBuffer;
 import io.protostuff.ProtostuffIOUtil;
 import io.protostuff.Schema;
@@ -9,14 +10,14 @@ import io.protostuff.runtime.RuntimeSchema;
 import org.jooq.lambda.Sneaky;
 
 import java.lang.reflect.Field;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import java.util.regex.Pattern;
 
 
-interface Proto {
-
+public interface Proto {
     static byte[] to(Object o) {
         //  synchronized (internal.buffer) {
         Object instance;
@@ -38,22 +39,33 @@ interface Proto {
         // }
     }
 
+
+    @SuppressWarnings("unchecked")
+    static <T> T from(byte[] data, Class<T> clz) {
+        boolean delegate = false;
+        final Schema<Object> schema;
+        if (clz.isInterface() && !clz.isAssignableFrom(List.class) && !clz.isAssignableFrom(Map.class)) {
+            schema = internal.getSchema(Delegator.class);
+            delegate = true;
+        } else {
+            schema = internal.getSchema(clz);
+        }
+
+        if (schema == null) throw new IllegalStateException("not found schema for type: " + clz);
+        Object o = schema.newMessage();
+        ProtostuffIOUtil.mergeFrom(data, o, schema);
+        if (delegate) {
+            return (T) ((Delegator) o).delegate();
+        }
+        return (T) o;
+    }
+
     static Object from(byte[] data, String clz) {
         final Schema<Object> schema = internal.schemaOf.apply(clz);
         if (schema == null) throw new IllegalStateException("not found schema for type: " + clz);
         Object o = schema.newMessage();
         ProtostuffIOUtil.mergeFrom(data, o, schema);
         return o;
-    }
-
-
-    @SuppressWarnings("unchecked")
-    static <T> T from(byte[] data, Class<T> clz) {
-        final Schema<Object> schema = internal.getSchema(clz);
-        if (schema == null) throw new IllegalStateException("not found schema for type: " + clz);
-        Object o = schema.newMessage();
-        ProtostuffIOUtil.mergeFrom(data, o, schema);
-        return (T) o;
     }
 
 
