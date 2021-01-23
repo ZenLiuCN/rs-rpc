@@ -11,13 +11,13 @@ class TicksTest {
     void test2from() {
         final Instant now = Instant.now();
         System.out.println(now);
-        System.out.println(Ticks.from(now, false));
+        System.out.println(Tick.from(now, false));
     }
 
     @Test
     void test1From() {
         final Instant instant = Instant.parse("2021-01-19T13:03:49.555Z");
-        final Map.Entry<Instant, Boolean> result = Ticks.from(5249152600722937904L);
+        final Map.Entry<Instant, Boolean> result = Tick.from(5249152600722937904L);
         System.out.println(result.getKey());
         System.out.println(instant);
     }

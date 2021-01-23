@@ -1,7 +1,6 @@
 package cn.zenliu.java.rs.rpc.core;
 
 import org.jetbrains.annotations.Nullable;
-import org.slf4j.Logger;
 
 import java.time.Duration;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -23,18 +22,34 @@ interface Context {
 
     String getName();
 
+    default @Nullable String getNameOnTrace() {
+        if (getTrace().get() || getDebug().get()) return getName();
+        return null;
+    }
+
     boolean isRoute();
 
 
-    void onDebug(Consumer<Logger> action);
+    void onDebug(String template, Object... args);
 
-    void withLog(Consumer<Logger> action);
+    void info(String template, Object... args);
 
-    void onDebugElse(Consumer<Logger> onDebug, Consumer<Logger> orElse);
+    void debug(String template, Object... args);
 
-    void onDebugWithTimer(@Nullable Consumer<Logger> onDebugBeforeAction, @Nullable Consumer<Logger> onDebugAfterAction, Consumer<Logger> action);
+    void warn(String template, Object... args);
 
-    <T> T onDebugWithTimerReturns(@Nullable Consumer<Logger> onDebugBeforeAction, @Nullable Consumer<Logger> onDebugAfterAction, Function<Logger, T> action);
+    void error(String template, Object... args);
+
+    @FunctionalInterface
+    interface WrapDebug {
+        void debug(String template, Object... args);
+    }
+
+    void onDebugElse(Consumer<WrapDebug> onDebug, Consumer<WrapDebug> orElse);
+
+    void onDebugWithTimer(@Nullable Consumer<WrapDebug> onDebugBeforeAction, @Nullable Consumer<WrapDebug> onDebugAfterAction, Consumer<Context> action);
+
+    <T> T onDebugWithTimerReturns(@Nullable Consumer<WrapDebug> onDebugBeforeAction, @Nullable Consumer<WrapDebug> onDebugAfterAction, Function<Context, T> action);
 
 
 }

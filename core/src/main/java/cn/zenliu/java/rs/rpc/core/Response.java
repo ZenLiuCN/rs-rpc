@@ -1,6 +1,7 @@
 package cn.zenliu.java.rs.rpc.core;
 
 import cn.zenliu.java.rs.rpc.api.Result;
+import cn.zenliu.java.rs.rpc.api.Tick;
 import io.netty.buffer.ByteBufUtil;
 import io.rsocket.Payload;
 import io.rsocket.util.DefaultPayload;
@@ -18,9 +19,9 @@ public @Builder
 @Getter
 final class Response {
     /**
-     * timestamp of sending
+     * tick of sending
      */
-    @Builder.Default final long timestamp = System.currentTimeMillis();
+    @Builder.Default final long tick = Tick.fromNowUTC();
     /**
      * Result
      */
@@ -44,9 +45,6 @@ final class Response {
 
     @Override
     public String toString() {
-        return "\n--------------RESPONSE----------------" +
-            "\n timestamp=" + timestamp +
-            "\n response=" + response +
-            "\n----------------------------------------";
+        return "RESPOND@" + tick + '{' + response + '}';
     }
 }

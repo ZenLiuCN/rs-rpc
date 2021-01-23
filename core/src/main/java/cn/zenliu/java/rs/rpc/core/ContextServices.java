@@ -23,23 +23,23 @@ interface ContextServices extends Context {
     }
 
     default void addHandler(String sign, Function<Object[], Result<Object>> handler) {
-        onDebug(log -> log.debug("[{}] before register handler: \nsign: {},\nregistry: {}{} => {}", getName(), sign, getSigns(), getHandlers(), getServices()));
+       onDebug("before register handler: \nsign: {},\nregistry: {}{} => {}", sign, getSigns(), getHandlers(), getServices());
         final int index = prepareHandlerSign(sign);
         if (index == -1) throw new IllegalStateException("a handler '" + sign + "' already exists! ");
         getHandlers().put(index, handler);
-        onDebug(log -> log.debug("[{}] after register handler: \nsign: {}\nregistry: {}{} => {}", getName(), sign, getSigns(), getHandlers(), getServices()));
+        onDebug("after register handler: \nsign: {}\nregistry: {}{} => {}", sign, getSigns(), getHandlers(), getServices());
     }
 
     default boolean addService(String service) {
-        onDebug(log -> log.debug("[{}] before to register service {} into {}", getName(), service, getServices()));
+        onDebug("before to register service {} into {}", service, getServices());
         if (getServices().contains(service)) {
-            withLog(log -> log.error("[{}] error to register a exists service {} into {}", getName(), service, getServices()));
+            error("fail to register a exists service {} into {}", service, getServices());
             return false;
         }
         try {
             return getServices().add(service);
         } finally {
-            onDebug(log -> log.debug("[{}] after to register a  service {} into {}", getName(), service, getServices()));
+            onDebug("after to register a  service {} into {}", service, getServices());
         }
     }
 

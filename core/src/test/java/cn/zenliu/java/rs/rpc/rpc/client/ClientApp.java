@@ -4,13 +4,14 @@ package cn.zenliu.java.rs.rpc.rpc.client;
 import cn.zenliu.java.rs.rpc.api.Config;
 import cn.zenliu.java.rs.rpc.api.Scope;
 import cn.zenliu.java.rs.rpc.core.Rpc;
-import cn.zenliu.java.rs.rpc.core.ScopeImpl;
 import cn.zenliu.java.rs.rpc.rpc.TestLauncher;
 import cn.zenliu.java.rs.rpc.rpc.common.TestService;
 import lombok.extern.slf4j.Slf4j;
 
 import java.time.Duration;
 import java.util.concurrent.ExecutionException;
+
+import static cn.zenliu.java.rs.rpc.rpc.Util.registerShutdown;
 
 @Slf4j
 public class ClientApp {
@@ -30,16 +31,12 @@ public class ClientApp {
             //.retry(Config.Retry.FixedDelay.of(100, Duration.ofDays(10)))
             .build());
         service.startClient("aClient", config.build());
-        final TestService bean = service.createClientService(TestService.class, null);
+        final TestService bean = service.createClientService(TestService.class, null, true);
         Thread.sleep(500);//wait for sync
         log.error("call getInt {}", bean.getInt());
-        log.warn("call getResult {}", bean.getResult(1L));
-        log.warn("call getResult {}", bean.getResult(-1L));
-
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            final ScopeImpl scope = (ScopeImpl) service;
-            log.warn("service {} info {} ", service.getName(), scope.getRoutes().get());
-            service.release();
-        }));
+        log.error("call getResult {}", bean.getResult(1L));
+        bean.ffi(-1);
+        log.error("call getResult {}", bean.getResult(-1L));
+        registerShutdown(service, log);
     }
 }

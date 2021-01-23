@@ -7,6 +7,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -19,29 +20,49 @@ import static cn.zenliu.java.rs.rpc.core.Remote.NONE_META_NAME;
  * @since 2021-01-23
  */
 interface ContextRoutes extends ContextRemoteServices, ContextServices {
-    static char ROUTE_MARK = '?';
+    char ROUTE_MARK = '?';
+
+    static String deRouteMark(String x) {
+        final int idx = x.lastIndexOf(ROUTE_MARK);
+        if (idx == -1) return x;
+        return x.substring(0, idx);
+    }
 
     AtomicReference<Set<String>> getRoutes();
 
-    default void updateRoutes() {
-        getRoutes().set(getServices().toSetWith(isRoute() ? getDomains() : null));
+    default void updateRoutes(Remote... exclude) {
+        final Set<String> routes = getServices().toSetWith(isRoute() ? getDomains() : null);
+        onDebug("update routes {} to {} ", getRoutes().get(), routes);
+        getRoutes().set(routes);
+        syncServMeta(exclude);
     }
 
     default Payload buildServMeta(@Nullable Remote forRemote) {
+        final Set<String> routes = getRoutes().get();
+        onDebug("routes to building ServMeta is {}", routes);
+        final List<String> service = new ArrayList<>();
+        if (forRemote != null && !forRemote.service.isEmpty()) {
+            for (String route : routes) {
+                if (forRemote.service.contains(deRouteMark(route))) {
+                    continue;
+                } else {
+                    service.add(route);
+                }
+            }
+        } else {
+            service.addAll(routes);
+        }
         final ServMeta.ServMetaBuilder builder = ServMeta.builder()
             .name(getName())
-            .service(new ArrayList<>(getRoutes().get()));
+            .service(service);
         if (forRemote != null) builder.known(forRemote.service);
         return DefaultPayload.create(DefaultPayload.EMPTY_BUFFER, ByteBuffer.wrap(Proto.to(builder.build())));
     }
 
     default void processRemoteUpdate(Remote in, Remote old, boolean known) {
-        if (known) {
-            onDebug(log -> log.debug("[{}] remove and update meta \n FROM {} \nTO {} with sync ", getName(), old, in));
-            pushServMeta(null, in);
-        }
+
         if (old == null && in.getName().equals(NONE_META_NAME)) {
-            onDebug(log -> log.debug("[{}] a new connection found {} \n sync serv meta :{}", getName(), in, getRoutes().get()));
+            onDebug("a new connection found {} \n sync serv meta :{}", in, getRoutes().get());
             getRemotes().put(in.idx, in);
             if (!known) pushServMeta(null, in);//todo
             return;
@@ -60,18 +81,24 @@ interface ContextRoutes extends ContextRemoteServices, ContextServices {
             in.setIdx(remoteIdx);
             final Remote olderRemote = getRemotes().get(remoteIdx);
             in.setWeight(Math.max(olderRemote.weight, 1));
-            onDebug(log -> log.debug("[{}] update meta for remote {}[{}] ", getName(), in, remoteIdx));
+            onDebug("update meta for remote {}[{}] ", in, remoteIdx);
             getRemotes().put(remoteIdx, in);
-            onDebug(log -> log.debug("[{}] remove and update meta \n FROM {} \nTO {}", getName(), old, in));
+            onDebug("remove and update meta \n FROM {} \nTO {}", old, in);
         } else {
-            onDebug(log -> log.debug("[{}] new meta from remote {}[{}] ", getName(), in, remoteIdx));
+            onDebug("new meta from remote {}[{}] ", in, remoteIdx);
             if (in.idx == -1) in.setIdx(remoteIdx);
             if (in.weight == 0) in.setWeight(1);
             getRemotes().put(remoteIdx, in);
         }
         if (updateRemoteService(in, old)) {
-            updateRoutes();
-            syncServMeta(in);
+            updateRoutes(in);
+            if (!known) {
+                onDebug("remove and update meta \n FROM {} \nTO {} with sync ", old, in);
+                pushServMeta(null, in);
+            }
+        } else if (!known) {
+            onDebug("remove and update meta \n FROM {} \nTO {} with sync ", old, in);
+            pushServMeta(null, in);
         }
     }
 
@@ -80,15 +107,15 @@ interface ContextRoutes extends ContextRemoteServices, ContextServices {
      */
     default void syncServMeta(Remote... exclude) {
         if (getRemotes().isEmpty()) return;
-        onDebug(log -> log.debug("[{}] will sync serv meta {} to remote {}  ", getName(), getRoutes().get(), getRemotes()));
+        onDebug("will sync serv meta {} to remote {}  ", getRoutes().get(), getRemotes());
         getRemotes().forEach((i, v) -> {
             for (Remote remote : exclude) {
                 if (remote == v) {
-                    onDebug(log -> log.debug("[{}] skip remote {} for is marked as Skip", getName(), getRemoteNames().get(i)));
+                    onDebug("skip remote {} for is marked as Skip", getRemoteNames().get(i));
                     return;
                 }
             }
-            onDebug(log -> log.debug(" [{}] sync serv meta to remote [{}]: {} ", getName(), v, getRoutes().get()));
+            onDebug("sync serv meta to remote [{}]: {} ", v, getRoutes().get());
             pushServMeta(null, v);
         });
     }
@@ -97,5 +124,11 @@ interface ContextRoutes extends ContextRemoteServices, ContextServices {
         target.pushServMeta(servMeta == null ? buildServMeta(target) : servMeta);
     }
 
+    @Override
+    default boolean addService(String service) {
+        final boolean r = ContextServices.super.addService(service);
+        if (r) updateRoutes();
+        return r;
+    }
 }
 

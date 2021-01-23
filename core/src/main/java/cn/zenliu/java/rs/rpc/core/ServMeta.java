@@ -26,7 +26,7 @@ public class ServMeta implements Serializable {
     /**
      * Supported Service Domain (Sign without methods)
      */
-    @Builder.Default final List<String> service = new ArrayList<>();
+    @Builder.Default final @Nullable List<String> service = new ArrayList<>();
     @Builder.Default final @Nullable Set<String> known = new HashSet<>();
 
     public boolean isKnown(Set<String> services) {

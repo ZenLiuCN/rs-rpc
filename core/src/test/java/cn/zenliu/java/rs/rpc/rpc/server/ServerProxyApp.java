@@ -2,11 +2,12 @@ package cn.zenliu.java.rs.rpc.rpc.server;
 
 import cn.zenliu.java.rs.rpc.api.Config;
 import cn.zenliu.java.rs.rpc.core.Rpc;
-import cn.zenliu.java.rs.rpc.core.ScopeImpl;
 import lombok.extern.slf4j.Slf4j;
 import lombok.val;
 
 import java.time.Duration;
+
+import static cn.zenliu.java.rs.rpc.rpc.Util.registerShutdown;
 
 /**
  * @author Zen.Liu
@@ -32,11 +33,7 @@ public class ServerProxyApp {
                 .build());
 
             service.startServer("aServer", builder.build());
-            Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-                final ScopeImpl scope = (ScopeImpl) service;
-                log.warn("service {} info {} ", service.getName(), scope.getRoutes().get());
-                service.release();
-            }));
+            registerShutdown(service, log);
         }).start();
     }
 }

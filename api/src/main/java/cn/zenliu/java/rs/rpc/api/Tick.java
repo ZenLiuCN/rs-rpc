@@ -12,7 +12,7 @@ import java.util.Map;
  * @apiNote
  * @since 2021-01-17
  */
-public interface Ticks {
+public interface Tick {
     long KindUtc = 0x4000000000000000L;//1
     long KindLocal = 0x8000000000000000L;//2
     long TicksMask = 0x3FFFFFFFFFFFFFFFL;

@@ -35,6 +35,6 @@ class JvmUniqueTest {
         assertFalse(JvmUnique.isMineFast(NRND_o));
         final JvmUnique.JvmUniqueId jvmUniqueId = JvmUnique.dumpName(NRND).get();
         System.out.println(jvmUniqueId.dump());
-        System.out.println(Ticks.from(jvmUniqueId.getTick()));
+        System.out.println(Tick.from(jvmUniqueId.getTick()));
     }
 }

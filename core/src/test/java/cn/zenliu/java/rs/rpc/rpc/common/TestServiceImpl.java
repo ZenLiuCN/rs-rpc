@@ -13,6 +13,11 @@ public class TestServiceImpl implements TestService {
     }
 
     @Override
+    public void ffi(int i) {
+        log.error("ffi {}", i);
+    }
+
+    @Override
     public Result<Long> getResult(Long arg) {
         log.info("current thread {}", Thread.currentThread().getId());
         return arg > 0 ? Result.ok(arg) : Result.error(new IllegalStateException("ososo"));

@@ -57,27 +57,28 @@ public interface Scope {
     void startClient(String name, Config.ClientConfig config);
 
     /**
-     * 释放方法,关闭所有本地服务和远程链接
+     * release and close all cache ,include all RS server and client
      */
     void release();
 
     /**
-     * 构建RPC代理服务
+     * build a Proxy Rpc Service
      *
-     * @param clientKlass       服务类型(接口)
-     * @param argumentProcessor (方法名:转换方法)<b>采用的序列化方法不支持自动序列化处理接口,需要使用代理类或公共实现</b>
-     * @param <T>               服务类型
-     * @return 服务实例
+     * @param clientKlass       service ( must be a interface)
+     * @param argumentProcessor parameter and result processor for each method (<b>if there is some interface parameter or result or else with nested interface that Implement may not exists in remote service</b>)
+     * @param useFNF            use fireAndForgot for void return method
+     * @param <T>               service type
+     * @return the Instance
      */
-    <T> T createClientService(Class<T> clientKlass, @Nullable Map<String, Function<Object[], Object[]>> argumentProcessor);
+    <T> T createClientService(Class<T> clientKlass, @Nullable Map<String, Function<Object[], Object[]>> argumentProcessor, boolean useFNF);
 
     /**
-     * 注册本地服务,提供RPC
+     * register a local service to serve
      *
-     * @param service         服务实例
-     * @param serviceKlass    服务接口
-     * @param resultProcessor 特殊结果处理器(方法名:转换方法)<b>采用的序列化方法不支持自动序列化处理接口,需要使用代理类或公共实现</b>
-     * @param <T>             服务类型
+     * @param service         the service instance
+     * @param serviceKlass    the define interface of the service
+     * @param resultProcessor parameter and result processor for each method (<b>if there is some interface parameter or result or else with nested interface that Implement may not exists in remote service</b>)
+     * @param <T>             type
      */
     <T> void registerService(
         T service,
@@ -86,14 +87,14 @@ public interface Scope {
     );
 
     /**
-     * 服务清单
+     * service list
      */
     @Unmodifiable List<String> names();
 
     /**
-     * 关闭指定服务
+     * close a named Server
      *
-     * @param name 服务名称
+     * @param name server name
      */
     boolean dispose(@NotNull String name);
 }

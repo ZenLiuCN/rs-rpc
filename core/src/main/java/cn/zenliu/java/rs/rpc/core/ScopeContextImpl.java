@@ -33,6 +33,7 @@ abstract class ScopeContextImpl implements ContextScope, ContextServers, Context
      * Scope Name
      */
     @Getter final String name;
+
     /**
      * Scope route ability
      */
@@ -44,56 +45,80 @@ abstract class ScopeContextImpl implements ContextScope, ContextServers, Context
         this.route = route;
     }
 
-    @Override
-    public void withLog(Consumer<Logger> action) {
-        action.accept(log);
-    }
 
     @Override
-    public void onDebug(Consumer<Logger> onDebug) {
+    public void onDebug(String template, Object... args) {
         if (debug.get()) {
-            if (onDebug != null) onDebug.accept(log);
+            log.debug("PRC [{}] " + template, argumentPrepend(args));
         }
     }
 
     @Override
-    public void onDebugElse(Consumer<Logger> onDebug, Consumer<Logger> orElse) {
+    public void info(String template, Object... args) {
+        log.info("PRC [{}] " + template, argumentPrepend(args));
+    }
+
+    @Override
+    public void debug(String template, Object... args) {
+        log.debug("PRC [{}] " + template, argumentPrepend(args));
+    }
+
+    @Override
+    public void warn(String template, Object... args) {
+        log.warn("PRC [{}] " + template, argumentPrepend(args));
+    }
+
+    @Override
+    public void error(String template, Object... args) {
+        log.error("PRC [{}] " + template, argumentPrepend(args));
+    }
+
+    private Object[] argumentPrepend(Object[] args) {
+        if (args == null || args.length == 0) return new Object[]{getName()};
+        final Object[] newArg = new Object[args.length + 1];
+        newArg[0] = getName();
+        System.arraycopy(args, 0, newArg, 1, args.length);
+        return newArg;
+    }
+
+    @Override
+    public void onDebugElse(Consumer<WrapDebug> onDebug, Consumer<WrapDebug> orElse) {
         if (debug.get()) {
-            if (onDebug != null) onDebug.accept(log);
+            if (onDebug != null) onDebug.accept(this::debug);
         } else {
-            if (orElse != null) orElse.accept(log);
+            if (orElse != null) orElse.accept(this::debug);
         }
     }
 
     @Override
-    public void onDebugWithTimer(Consumer<Logger> onDebugBefore, Consumer<Logger> onDebugAfter, Consumer<Logger> action) {
+    public void onDebugWithTimer(@Nullable Consumer<WrapDebug> onDebugBeforeAction, @Nullable Consumer<WrapDebug> onDebugAfterAction, Consumer<Context> action) {
         if (debug.get()) {
             long ts = System.nanoTime();
             try {
-                if (onDebugBefore != null) onDebugBefore.accept(log);
-                action.accept(log);
-                if (onDebugAfter != null) onDebugAfter.accept(log);
+                if (onDebugBeforeAction != null) onDebugBeforeAction.accept(this::debug);
+                action.accept(this);
+                if (onDebugAfterAction != null) onDebugAfterAction.accept(this::debug);
             } finally {
                 log.debug("Total cost {} μs", (System.nanoTime() - ts) / 1000.0);
             }
         } else {
-            action.accept(log);
+            action.accept(this);
         }
     }
 
     @Override
-    public <T> T onDebugWithTimerReturns(@Nullable Consumer<Logger> onDebugBeforeAction, @Nullable Consumer<Logger> onDebugAfterAction, Function<Logger, T> action) {
+    public <T> T onDebugWithTimerReturns(@Nullable Consumer<WrapDebug> onDebugBeforeAction, @Nullable Consumer<WrapDebug> onDebugAfterAction, Function<Context, T> action) {
         if (debug.get()) {
             long ts = System.nanoTime();
             try {
-                if (onDebugBeforeAction != null) onDebugBeforeAction.accept(log);
-                return action.apply(log);
+                if (onDebugBeforeAction != null) onDebugBeforeAction.accept(this::debug);
+                return action.apply(this);
             } finally {
-                if (onDebugAfterAction != null) onDebugAfterAction.accept(log);
+                if (onDebugAfterAction != null) onDebugAfterAction.accept(this::debug);
                 log.debug("Total cost {} μs", (System.nanoTime() - ts) / 1000.0);
             }
         } else {
-            return action.apply(log);
+            return action.apply(this);
         }
     }
 
@@ -116,7 +141,6 @@ abstract class ScopeContextImpl implements ContextScope, ContextServers, Context
     @Getter final UniqueList signs = UniqueList.of(new CopyOnWriteArrayList<>());
 
 
-
     /**
      * remotes domain registry
      */
@@ -134,8 +158,6 @@ abstract class ScopeContextImpl implements ContextScope, ContextServers, Context
      * store remote names
      */
     @Getter final UniqueList remoteNames = UniqueList.of(new CopyOnWriteArrayList<>());
-
-
 
 
     @Getter final AtomicBoolean debug = new AtomicBoolean(false);

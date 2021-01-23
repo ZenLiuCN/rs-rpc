@@ -47,11 +47,11 @@ public final class Remote implements Serializable {
     /**
      * weight to do load balance or something else
      */
-    transient int weight = 1;
+    @Builder.Default transient int weight = 1;
     /**
      * remote index for faster location
      */
-    transient int idx = -1;
+    @Builder.Default transient int idx = -1;
 
     public static Remote fromMeta(ServMeta r, boolean resume) {
         return Remote.builder()
@@ -127,19 +127,18 @@ public final class Remote implements Serializable {
 
     @Override
     public String toString() {
-        return "\n--------------REMOTE-----------------" +
-            "\n name='" + name + '\'' +
-            "\n service=" + service +
-            "\n socket=" + socket +
-            "\n resume=" + resume +
-            "\n server=" + "ServiceRSocket{" +
-            "serverName='" + server.server + '\'' +
-            ", isServer=" + server.serverMode +
+        return "REMOTE@" + name +
+            "{=>:" + service +
+            "," + socket +
+            ",resume:" + resume +
+            ",server:{'" + server.server + '\'' +
+            ", " + (server.serverMode ? "server" : "client") +
             '}' +
-            "\n weight=" + weight +
-            "\n idx=" + idx +
-            "\n-----------------------------------";
+            ",w:" + weight +
+            ",i:" + idx +
+            "}";
     }
+
 
     public void pushServMeta(Payload meta) {
         if (!resume) {

@@ -7,6 +7,7 @@ import cn.zenliu.java.rs.rpc.core.ProxyUtil.ServiceRegister;
 import io.netty.buffer.ByteBufUtil;
 import io.rsocket.Payload;
 import io.rsocket.RSocket;
+import io.rsocket.util.DefaultPayload;
 import lombok.Builder;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -35,15 +36,13 @@ import static cn.zenliu.java.rs.rpc.core.ProxyUtil.serviceRegisterBuilder;
 public final class ScopeImpl extends ScopeContextImpl implements Scope, Serializable {
     private static final long serialVersionUID = -7734615300814212060L;
 
-
-    transient final ClientCreator clientCreator;
-    transient final ServiceRegister serviceRegister = serviceRegisterBuilder(this::addService, this::addHandler);
+    transient final ClientCreator clientCreator = clientCreatorBuilder(this, this::routeingFNF, this::routeingRR);
+    transient final ServiceRegister serviceRegister = serviceRegisterBuilder(this, this::addService, this::addHandler);
 
 
     @Builder
     public ScopeImpl(String name, boolean route) {
         super(name == null || name.isEmpty() ? UUID.randomUUID().toString() : name, route);
-        clientCreator = clientCreatorBuilder(name, this::routeingFNF, this::routeingRR);
     }
 
     static String dump(Remote remote, Payload payload) {
@@ -85,9 +84,6 @@ public final class ScopeImpl extends ScopeContextImpl implements Scope, Serializ
         super.purify();
     }
 
-    //region Client And Server Builders
-
-    //endregion
 
     /**
      * {@inheritDoc}
@@ -99,7 +95,7 @@ public final class ScopeImpl extends ScopeContextImpl implements Scope, Serializ
 
         RSocketUtil.buildClient((setup, sending) -> {
                 final Remote remote = Remote.builder()
-                    .idx(-servers.size())
+                    .idx(-getRemoteNames().size())
                     .socket(sending)
                     .build();
                 if (debug.get()) {
@@ -109,7 +105,7 @@ public final class ScopeImpl extends ScopeContextImpl implements Scope, Serializ
                 remote.setServer(rSocket);
                 processRemoteUpdate(remote, null, false);
                 return Mono.just(rSocket);
-            }, resume -> Mono.fromCallable(() -> buildServMeta(null))
+            }, resume -> Mono.fromCallable(() -> DefaultPayload.create(Proto.to(resume)))
             , config)
             .subscribe(client -> {
                 log.debug("rpc client [{}] started", name);
@@ -128,7 +124,7 @@ public final class ScopeImpl extends ScopeContextImpl implements Scope, Serializ
             //current setup from client is support resume or not
             Boolean resume = Proto.from(ByteBufUtil.getBytes(setup.sliceData()), Boolean.class);
             final Remote remote = Remote.builder()
-                .idx(-servers.size())
+                .idx(-getRemoteNames().size())
                 .name("UNK")
                 .socket(sending)
                 .resume(resume)
@@ -140,7 +136,7 @@ public final class ScopeImpl extends ScopeContextImpl implements Scope, Serializ
             return Mono.just(rSocket);
         }, config)
             .subscribe(server -> {
-                log.info("RS-RPC server [{}] started on {}:{}", name, config.getBindAddress() == null ? "0.0.0.0" : config.getBindAddress(), config.getPort());
+                info("started on {}:{}", config.getBindAddress() == null ? "0.0.0.0" : config.getBindAddress(), config.getPort());
                 addServer(server, name);
             });
     }
@@ -150,8 +146,8 @@ public final class ScopeImpl extends ScopeContextImpl implements Scope, Serializ
      */
     @SuppressWarnings("unchecked")
     @Override
-    public <T> T createClientService(Class<T> clientKlass, @Nullable Map<String, Function<Object[], Object[]>> argumentProcessor) {
-        return (T) clientCreator.create(clientKlass, argumentProcessor);
+    public <T> T createClientService(Class<T> clientKlass, @Nullable Map<String, Function<Object[], Object[]>> argumentProcessor, boolean useFNF) {
+        return (T) clientCreator.create(clientKlass, argumentProcessor, useFNF);
     }
 
     /**
@@ -160,7 +156,6 @@ public final class ScopeImpl extends ScopeContextImpl implements Scope, Serializ
     @Override
     public <T> void registerService(T service, Class<T> serviceKlass, @Nullable Map<String, Function<Object, Object>> resultProcessor) {
         serviceRegister.register(service, serviceKlass, resultProcessor);
-        syncServMeta();
     }
 
 
@@ -193,17 +188,19 @@ public final class ScopeImpl extends ScopeContextImpl implements Scope, Serializ
 
         @Override
         public @NotNull Mono<Void> fireAndForget(@NotNull Payload payload) {
+            onDebug("{} on FireAndForget {} ", server, dump(remoteRef.get(), payload));
             return FunctorPayload.fnfHandler(payload, remoteRef.get(), ScopeImpl.this::onServMeta, ScopeImpl.this::onFNF);
         }
 
         @Override
         public @NotNull Mono<Payload> requestResponse(@NotNull Payload payload) {
-            onDebug(log -> log.debug("[{}] {} on RequestResponse {}", name, server, dump(remoteRef.get(), payload)));
+            onDebug("{} on RequestResponse {}", server, dump(remoteRef.get(), payload));
             return FunctorPayload.rrHandler(payload, remoteRef.get(), ScopeImpl.this::onRR);
         }
 
         @Override
         public @NotNull Mono<Void> metadataPush(@NotNull Payload payload) {
+            onDebug("{} on MetadataPush {}", server, dump(remoteRef.get(), payload));
             return FunctorPayload.metaPushHandler(payload, remoteRef.get(), ScopeImpl.this::onServMeta);
         }
 

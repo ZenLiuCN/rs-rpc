@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.function.Consumer;
 
+import static cn.zenliu.java.rs.rpc.core.ContextRoutes.deRouteMark;
 import static cn.zenliu.java.rs.rpc.core.ScopeContextImpl.ROUTE_MARK;
 
 /**
@@ -50,13 +51,16 @@ final class UniqueList {
         return value.add(v);
     }
 
-    void withRouteMark(Consumer<String> consumer) {
-        value.iterator().forEachRemaining(x -> consumer.accept(x + ROUTE_MARK));
+    void withRouteMark(Consumer<String> consumer, Set<String> exclude) {
+        value.forEach(x -> {
+            if (!(exclude.contains(deRouteMark(x))))
+                consumer.accept(x.endsWith(ROUTE_MARK + "") ? x : (x + ROUTE_MARK));
+        });
     }
 
     public Set<String> toSetWith(UniqueList other) {
         Set<String> set = new HashSet<>(value);
-        if (other != null) other.withRouteMark(set::add);
+        if (other != null) other.withRouteMark(set::add, set);
         return set;
     }
 
@@ -65,10 +69,15 @@ final class UniqueList {
     }
 
     public String get(int i) {
-        return get(i);
+        return value.get(i);
     }
 
     public int size() {
         return value.size();
+    }
+
+    @Override
+    public String toString() {
+        return value.toString();
     }
 }

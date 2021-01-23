@@ -13,7 +13,7 @@ import java.util.Collections;
 import java.util.Enumeration;
 import java.util.Optional;
 
-import static cn.zenliu.java.rs.rpc.api.Ticks.fromNowUTC;
+import static cn.zenliu.java.rs.rpc.api.Tick.fromNowUTC;
 
 /**
  * Tool to Build a Unique Id For Current Jvm<br>

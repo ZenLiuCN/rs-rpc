@@ -22,22 +22,22 @@ interface ContextRemoteServices extends ContextRemotes {
     }
 
     default @Nullable Remote findRemoteService(String domain) {
-        onDebug(log -> log.debug("[{}] before findRouteDomain {} in {}", getName(), domain, getDomains()));
+        onDebug("before findRouteDomain {} in {}", domain, getDomains());
         int index = getDomains().indexOf(domain);
         if (index == -1 && !isRoute()) {
-            onDebug(log -> log.debug("[{}] find no domain {} in {} with no routeing enabled.", getName(), domain, getDomains()));
+            onDebug("find no domain {} in {} with no routeing enabled.", domain, getDomains());
             return null;
         } else if (index == -1) {
-            onDebug(log -> log.debug("[{}] try find domain {} in {} with routeing", getName(), domain + ROUTE_MARK, getDomains()));
+            onDebug("try find domain {} in {} with routeing", domain + ROUTE_MARK, getDomains());
             index = getDomains().indexOf(domain + ROUTE_MARK);
         }
         if (index == -1) {
-            onDebug(log -> log.debug("[{}] find no domain {} in {} with routeing", getName(), domain + ROUTE_MARK, getDomains()));
+            onDebug("find no domain {} in {} with routeing", domain + ROUTE_MARK, getDomains());
             return null;
         }
         final ConcurrentSkipListSet<Remote> remotes = getRemoteServices().get(index);
         if (remotes.isEmpty()) {
-            onDebug(log -> log.debug("[{}] find domain {} in {} with routeing, but found no Remote exists in {}!", getName(), domain + ROUTE_MARK, getDomains(), getRemoteServices()));
+            onDebug("find domain {} in {} with routeing, but found no Remote exists in {}!", domain + ROUTE_MARK, getDomains(), getRemoteServices());
             return null;
         }
         return remotes.first();
@@ -45,15 +45,15 @@ interface ContextRemoteServices extends ContextRemotes {
 
     default boolean updateRemoteService(Remote newRemote, Remote oldRemote) {
         boolean updated = false;
-        onDebug(log -> log.debug("[{}] before update remote service: {} to {} \n {} {}", getName(), newRemote, oldRemote, getDomains(), getRemoteServices()));
+        onDebug("before update remote service: {} to {} \n {} {}", newRemote, oldRemote, getDomains(), getRemoteServices());
         if (oldRemote != null) {
             oldRemote.service.forEach(v -> removeOldRemoteService(v, oldRemote));
         }
-        onDebug(log -> log.debug("[{}] after remove old when update remote service: {} to {} \n {} {}", getName(), newRemote, oldRemote, getDomains(), getRemoteServices()));
+        onDebug("after remove old when update remote service: {} to {} \n {} {}", newRemote, oldRemote, getDomains(), getRemoteServices());
         for (String domain : newRemote.service) {
-            onDebug(log -> log.debug("[{}] before register remote {} with service {}", getName(), newRemote.name, domain));
+            onDebug("before register remote {} with service {}", newRemote.name, domain);
             final int index = getOrAddDomain(domain);
-            updated = updated || index == getDomains().size();
+            updated = updated || index == getDomains().size() - 1;
             ConcurrentSkipListSet<Remote> remotes = getRemoteServices().get(index);
             if (remotes == null) {
                 remotes = new ConcurrentSkipListSet<>(Remote.weightComparator);
@@ -61,7 +61,7 @@ interface ContextRemoteServices extends ContextRemotes {
             }
             remotes.add(newRemote);
         }
-        onDebug(log -> log.debug("[{}] after update remote service: {} to {} \n {} {}", getName(), newRemote, oldRemote, getDomains(), getRemoteServices()));
+        onDebug("after update remote service: \n {} to {} \n {} {} \n domain update status:{}", oldRemote, newRemote, getDomains(), getRemoteServices(), updated);
         return updated;
     }
 

@@ -4,7 +4,6 @@ package cn.zenliu.java.rs.rpc.rpc.client;
 import cn.zenliu.java.rs.rpc.api.Config;
 import cn.zenliu.java.rs.rpc.api.Scope;
 import cn.zenliu.java.rs.rpc.core.Rpc;
-import cn.zenliu.java.rs.rpc.core.ScopeImpl;
 import cn.zenliu.java.rs.rpc.rpc.TestLauncher;
 import cn.zenliu.java.rs.rpc.rpc.common.TestService;
 import cn.zenliu.java.rs.rpc.rpc.common.TestServiceImpl;
@@ -12,6 +11,8 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.time.Duration;
 import java.util.concurrent.ExecutionException;
+
+import static cn.zenliu.java.rs.rpc.rpc.Util.registerShutdown;
 
 @Slf4j
 public class ClientProxyApp {
@@ -33,11 +34,7 @@ public class ClientProxyApp {
                 //.retry(Config.Retry.FixedDelay.of(100, Duration.ofDays(10)))
                 .build());
             service.startClient("aProxyClient", config.build());
-            Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-                final ScopeImpl scope = (ScopeImpl) service;
-                log.warn("service {} info {} ", service.getName(), scope.getRoutes().get());
-                service.release();
-            }));
+            registerShutdown(service, log);
         }).start();
 
     }

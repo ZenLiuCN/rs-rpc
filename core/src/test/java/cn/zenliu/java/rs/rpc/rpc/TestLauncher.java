@@ -17,7 +17,7 @@ import java.util.concurrent.ExecutionException;
 public class TestLauncher {
     public static final boolean debug = true;
     public static final boolean trace = false;
-    public static final boolean resume = false;
+    public static final boolean resume = true;
     public static final boolean routeing = true;
     public static final Duration timeout = Duration.ofMillis(500);
 

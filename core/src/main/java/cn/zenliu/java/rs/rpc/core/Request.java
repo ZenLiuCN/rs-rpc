@@ -34,9 +34,9 @@ class Request {
         final Request request = Request.builder()
             .arguments(arguments)
             .build();
-        val meta = Meta.builder().sign(domain).build();
-        if (trace) meta.addTrace(scope);
-        return DefaultPayload.create(Proto.to(request), Proto.to(meta));
+        val meta = Meta.builder().sign(domain).from(scope);
+        if (trace) meta.trace(true);
+        return DefaultPayload.create(Proto.to(request), Proto.to(meta.build()));
     }
 
     public static Request parseRequest(Payload p) {
@@ -60,10 +60,7 @@ class Request {
 
     @Override
     public String toString() {
-        return "\n--------------REQUEST----------------" +
-            "\n timestamp=" + timestamp +
-            "\n arguments=" + Arrays.toString(arguments) +
-            "\n----------------------------------------";
+        return "REQUEST@" + timestamp + '{' + Arrays.toString(arguments) + '}';
     }
 
 }
