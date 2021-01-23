@@ -28,6 +28,7 @@ public interface Proto {
         } catch (Exception ex) {
             instance = o;
         }
+
         final Object target = instance;
         final Schema<Object> schema = internal.schemaFrom.apply(target);
         if (schema == null) throw new IllegalStateException("not found schema for type: " + o.getClass());
@@ -46,7 +47,6 @@ public interface Proto {
         final Schema<Object> schema;
         if (clz.isInterface() && !clz.isAssignableFrom(List.class) && !clz.isAssignableFrom(Map.class)) {
             schema = internal.getSchema(Delegator.class);
-            delegate = true;
         } else {
             schema = internal.getSchema(clz);
         }
@@ -54,7 +54,7 @@ public interface Proto {
         if (schema == null) throw new IllegalStateException("not found schema for type: " + clz);
         Object o = schema.newMessage();
         ProtostuffIOUtil.mergeFrom(data, o, schema);
-        if (delegate) {
+        if (o instanceof Delegator) {
             return (T) ((Delegator) o).delegate();
         }
         return (T) o;

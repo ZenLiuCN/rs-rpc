@@ -32,23 +32,31 @@ public final class Delegator implements InvocationHandler {
      * Copier Cache
      */
     public static final Map<Class<?>, Function<Object, Map<String, Object>>> copier = new ConcurrentHashMap<>();
-    /**
-     * Delegate target type
-     */
-    public final Class<?> type;
+    public final Schema type;
     /**
      * 值
      */
     public final Map<String, Object> values;
     private Constructor<MethodHandles.Lookup> constructor;
     transient Object[] result = {new Object()};
+
     Delegator(Class<?> type) {
+        this.type = Schema.light(type);
+        this.values = new HashMap<>();
+    }
+
+    Delegator(Schema type) {
         this.type = type;
         this.values = new HashMap<>();
     }
 
-    Delegator(Class<?> type, Map<String, Object> values) {
+    Delegator(Schema type, Map<String, Object> values) {
         this.type = type;
+        this.values = values == null ? new ConcurrentHashMap<>() : new ConcurrentHashMap<>(values);
+    }
+
+    Delegator(Class<?> type, Map<String, Object> values) {
+        this.type = Schema.light(type);
         this.values = values == null ? new ConcurrentHashMap<>() : new ConcurrentHashMap<>(values);
     }
 
@@ -149,7 +157,7 @@ public final class Delegator implements InvocationHandler {
      */
     @SneakyThrows
     public Object delegate() {
-        return proxy(type);
+        return proxy(type.type);
     }
 
     @Override
@@ -163,11 +171,11 @@ public final class Delegator implements InvocationHandler {
         } else if (length == 1 && name.startsWith("set")) {
             return values.put(name.substring(3), args);
         } else if (length == 0 && name.equals("toString")) {
-            return type + values.toString();
+            return type.type + values.toString();
         } else if (method.isDefault()) {
             if (result == null) {
                 result = new Object[1];
-                result[0] = Proxy.newProxyInstance(type.getClassLoader(), new Class[]{type}, this);
+                result[0] = Proxy.newProxyInstance(type.type.getClassLoader(), new Class[]{type.type}, this);
             }
             try {
                 if (constructor == null)
