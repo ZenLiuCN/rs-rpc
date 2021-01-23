@@ -72,6 +72,10 @@ public final class Delegator implements InvocationHandler {
         return new Delegator(clz, init).proxy(clz);
     }
 
+    public static <T> T proxy(Schema<T> clz, Map<String, Object> init) {
+        return new Delegator(clz, init).proxy(clz.type);
+    }
+
     /**
      * Build a Delegate Proxy via Instance values
      *
@@ -82,6 +86,10 @@ public final class Delegator implements InvocationHandler {
      */
     public static <T> T proxy(Class<T> clz, T instance) {
         return new Delegator(clz, copy(instance, clz)).proxy(clz);
+    }
+
+    public static <T> T proxy(Schema<T> clz, T instance) {
+        return new Delegator(clz, copy(instance, clz.type)).proxy(clz.type);
     }
 
     /**

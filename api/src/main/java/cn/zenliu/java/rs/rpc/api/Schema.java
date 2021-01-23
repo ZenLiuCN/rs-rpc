@@ -1,6 +1,7 @@
 package cn.zenliu.java.rs.rpc.api;
 
 import java.util.HashMap;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -8,16 +9,16 @@ import java.util.Objects;
  * @apiNote
  * @since 2021-01-23
  */
-public final class Schema {
+public final class Schema<T> {
     final boolean list;
     final boolean mapKey;
     final boolean mapValue;
     final String rec;
     final boolean recList;
-    final Class<?> type;
+    final Class<T> type;
     final HashMap<String, Schema> values;
 
-    Schema(boolean list, boolean mapKey, boolean mapValue, String rec, boolean recList, Class<?> type, HashMap<String, Schema> values) {
+    Schema(boolean list, boolean mapKey, boolean mapValue, String rec, boolean recList, Class<T> type, HashMap<String, Schema> values) {
         this.list = list;
         this.mapKey = mapKey;
         this.mapValue = mapValue;
@@ -27,17 +28,29 @@ public final class Schema {
         this.values = values;
     }
 
+    public boolean isTop() {
+        return !(list || mapKey || mapValue);
+    }
+
+    public void delegate(Map<String, Object> data) {
+
+    }
+
+    public void restore(Map<String, Object> data) {
+
+    }
+
     public static SchemaBuilder builder() {
         return new SchemaBuilder();
     }
 
-    public static class SchemaBuilder {
+    public static class SchemaBuilder<T> {
         private boolean list = false;
         private boolean mapKey = false;
         private boolean mapValue = false;
         private String recursive;
         private boolean recList = false;
-        private Class<?> type;
+        private Class<T> type;
         private HashMap<String, Schema> values;
 
         SchemaBuilder() {
@@ -64,7 +77,7 @@ public final class Schema {
             return this;
         }
 
-        public SchemaBuilder type(Class<?> type) {
+        public SchemaBuilder type(Class<T> type) {
             this.type = type;
             return this;
         }
@@ -95,7 +108,7 @@ public final class Schema {
         }
     }
 
-    public static Schema light(Class<?> type) {
+    public static <T> Schema<T> light(Class<T> type) {
         return Schema.builder().type(type).build();
     }
 }
