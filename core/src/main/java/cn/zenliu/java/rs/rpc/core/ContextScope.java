@@ -89,7 +89,7 @@ public interface ContextScope extends ContextRoutes {
                 }
             );
         } else if (isRoute()) {
-            final String domain = meta.sign.substring(0, meta.sign.indexOf(ProxyUtil.DOMAIN_SPLITTER));
+            final String domain = domainOf(meta.sign);
             final Remote service = findRemoteService(domain);
             if (service != null) {
                 onDebugElse(x -> x.debug("routeing RequestAndResponse:" + LOG_META + "\n NEXT:{}", meta, remote, service)
