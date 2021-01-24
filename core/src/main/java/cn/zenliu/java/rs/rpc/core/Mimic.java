@@ -3,13 +3,11 @@ package cn.zenliu.java.rs.rpc.core;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.jooq.lambda.Seq;
-import org.jooq.lambda.tuple.Tuple2;
+import org.jooq.lambda.tuple.*;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.reflect.*;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
@@ -213,19 +211,14 @@ public class Mimic<T> implements InvocationHandler, cn.zenliu.java.rs.rpc.api.De
 
     public static AtomicReference<Predicate<String>> delegateInterfaceName = new AtomicReference<>(x -> true);
 
-    @SuppressWarnings("unchecked")
+
     public static Object autoBuild(Object instance) {
-        if (instance == null) return instance;
+        if (instance == null) return null;
         final Class<?> aClass = instance.getClass();
         if (aClass.isPrimitive() || aClass.isEnum() || aClass.isArray()) return instance;
-        if (List.class.isAssignableFrom(aClass)) {
-            List<Object> a = (List<Object>) instance;
-            if (a.isEmpty()) return instance;
-            return Seq.seq(a).map(Mimic::autoBuild).toList();
-        } else if (Map.class.isAssignableFrom(aClass)) {
-            Map<Object, Object> a = (Map<Object, Object>) instance;
-            if (a.isEmpty()) return instance;
-            return Seq.seq(a).map(x -> x.map2(Mimic::autoBuild)).toMap(Tuple2::v1, Tuple2::v2);
+        else {
+            final Object result = containerProcess(instance, Mimic::autoBuild);
+            if (result != instance) return result;
         }
         final Class<?>[] interfaces = aClass.getInterfaces();
         if (interfaces == null || interfaces.length == 0 || !delegateInterfaceName.get().test(interfaces[0].getName()))
@@ -233,18 +226,188 @@ public class Mimic<T> implements InvocationHandler, cn.zenliu.java.rs.rpc.api.De
         return build(instance, interfaces[0]);
     }
 
-    @SuppressWarnings({"DuplicatedCode", "unchecked"})
+
     public static Object autoDelegate(Object instance) {
-        if (instance instanceof Mimic) {
+        if (instance == null) return null;
+        if (instance instanceof cn.zenliu.java.rs.rpc.api.Delegator) {
             return ((Mimic<?>) instance).delegate();
-        } else if (instance instanceof Map) {
-            Map<Object, Object> a = (Map<Object, Object>) instance;
-            if (a.isEmpty()) return instance;
-            return Seq.seq(a).map(x -> x.map2(Mimic::autoDelegate)).toMap(Tuple2::v1, Tuple2::v2);
+        }
+        return containerProcess(instance, Mimic::autoDelegate);
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    static Object containerProcess(Object instance, Function<Object, Object> processor) {
+        if (instance == null) return instance;
+        if (instance instanceof Optional) {
+            Optional<Object> a = (Optional<Object>) instance;
+            if (!a.isPresent()) return instance;
+            return a.map(processor);
         } else if (instance instanceof List) {
             List<Object> a = (List<Object>) instance;
             if (a.isEmpty()) return instance;
-            return Seq.seq(a).map(Mimic::autoDelegate).toList();
+            return Seq.seq(a).map(processor).toList();
+        } else if (instance instanceof Map.Entry) {
+            Map.Entry<Object, Object> a = (Map.Entry<Object, Object>) instance;
+            return new AbstractMap.SimpleEntry<>(autoBuild(a.getKey()), autoBuild(a.getValue()));
+        } else if (instance instanceof Map) {
+            Map<Object, Object> a = (Map<Object, Object>) instance;
+            if (a.isEmpty()) return instance;
+            return Seq.seq(a).map(x -> x.map1(processor).map2(processor)).toMap(Tuple2::v1, Tuple2::v2);
+        } else if (instance instanceof Tuple) {
+            if (instance instanceof Tuple0) return instance;
+            else if (instance instanceof Tuple1) return ((Tuple1) instance)
+                .map1(processor);
+            else if (instance instanceof Tuple2) return ((Tuple2) instance)
+                .map1(processor)
+                .map2(processor);
+            else if (instance instanceof Tuple3) return ((Tuple3) instance)
+                .map1(processor)
+                .map2(processor)
+                .map3(processor);
+            else if (instance instanceof Tuple4) return ((Tuple4) instance)
+                .map1(processor)
+                .map2(processor)
+                .map3(processor)
+                .map4(processor);
+            else if (instance instanceof Tuple5) return ((Tuple5) instance)
+                .map1(processor)
+                .map2(processor)
+                .map3(processor)
+                .map4(processor)
+                .map5(processor);
+            else if (instance instanceof Tuple6) return ((Tuple6) instance)
+                .map1(processor)
+                .map2(processor)
+                .map3(processor)
+                .map4(processor)
+                .map5(processor)
+                .map6(processor);
+            else if (instance instanceof Tuple7) return ((Tuple7) instance)
+                .map1(processor)
+                .map2(processor)
+                .map3(processor)
+                .map4(processor)
+                .map5(processor)
+                .map6(processor)
+                .map7(processor);
+            else if (instance instanceof Tuple8) return ((Tuple8) instance)
+                .map1(processor)
+                .map2(processor)
+                .map3(processor)
+                .map4(processor)
+                .map5(processor)
+                .map6(processor)
+                .map7(processor)
+                .map8(processor);
+            else if (instance instanceof Tuple9) return ((Tuple9) instance)
+                .map1(processor)
+                .map2(processor)
+                .map3(processor)
+                .map4(processor)
+                .map5(processor)
+                .map6(processor)
+                .map7(processor)
+                .map8(processor)
+                .map9(processor);
+            else if (instance instanceof Tuple10) return ((Tuple10) instance)
+                .map1(processor)
+                .map2(processor)
+                .map3(processor)
+                .map4(processor)
+                .map5(processor)
+                .map6(processor)
+                .map7(processor)
+                .map8(processor)
+                .map9(processor)
+                .map10(processor);
+            else if (instance instanceof Tuple11) return ((Tuple11) instance)
+                .map1(processor)
+                .map2(processor)
+                .map3(processor)
+                .map4(processor)
+                .map5(processor)
+                .map6(processor)
+                .map7(processor)
+                .map8(processor)
+                .map9(processor)
+                .map10(processor)
+                .map11(processor);
+            if (instance instanceof Tuple12) return ((Tuple12) instance)
+                .map1(processor)
+                .map2(processor)
+                .map3(processor)
+                .map4(processor)
+                .map5(processor)
+                .map6(processor)
+                .map7(processor)
+                .map8(processor)
+                .map9(processor)
+                .map10(processor)
+                .map11(processor)
+                .map12(processor);
+            else if (instance instanceof Tuple13) return ((Tuple13) instance)
+                .map1(processor)
+                .map2(processor)
+                .map3(processor)
+                .map4(processor)
+                .map5(processor)
+                .map6(processor)
+                .map7(processor)
+                .map8(processor)
+                .map9(processor)
+                .map10(processor)
+                .map11(processor)
+                .map12(processor)
+                .map13(processor);
+            else if (instance instanceof Tuple14) return ((Tuple14) instance)
+                .map1(processor)
+                .map2(processor)
+                .map3(processor)
+                .map4(processor)
+                .map5(processor)
+                .map6(processor)
+                .map7(processor)
+                .map8(processor)
+                .map9(processor)
+                .map10(processor)
+                .map11(processor)
+                .map12(processor)
+                .map13(processor)
+                .map14(processor);
+            else if (instance instanceof Tuple15) return ((Tuple15) instance)
+                .map1(processor)
+                .map2(processor)
+                .map3(processor)
+                .map4(processor)
+                .map5(processor)
+                .map6(processor)
+                .map7(processor)
+                .map8(processor)
+                .map9(processor)
+                .map10(processor)
+                .map11(processor)
+                .map12(processor)
+                .map13(processor)
+                .map14(processor)
+                .map15(processor);
+            else if (instance instanceof Tuple16) return ((Tuple16) instance)
+                .map1(processor)
+                .map2(processor)
+                .map3(processor)
+                .map4(processor)
+                .map5(processor)
+                .map6(processor)
+                .map7(processor)
+                .map8(processor)
+                .map9(processor)
+                .map10(processor)
+                .map11(processor)
+                .map12(processor)
+                .map13(processor)
+                .map14(processor)
+                .map15(processor)
+                .map16(processor);
+            else return instance;
         }
         return instance;
     }
