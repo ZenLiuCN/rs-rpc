@@ -6,6 +6,7 @@ import org.jooq.lambda.Seq;
 import java.lang.ref.SoftReference;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -38,35 +39,36 @@ public interface ReflectUtil {
             ;
     }
 
+
     AtomicReference<Predicate<Method>> getterPredicate = new AtomicReference<>(ReflectUtil::javaBeanGetterPredicate);
 
-    Map<Class<?>, SoftReference<Method[]>> reflectDeclareCache = new ConcurrentHashMap<>();
+    Map<Class<?>, SoftReference<Method[]>> reflectMethodsCache = new ConcurrentHashMap<>();
     Map<Class<?>, SoftReference<List<Method>>> reflectGetterCache = new ConcurrentHashMap<>();
     Map<Class<?>, Class<?>> reflectInterfaceCache = new ConcurrentHashMap<>();
 
-    static Method[] getDeclareMethods(Class<?> clazz) {
-        if (reflectDeclareCache.containsKey(clazz)) {
-            final SoftReference<Method[]> ref = reflectDeclareCache.get(clazz);
+    static Method[] getMethods(Class<?> clazz) {
+        if (reflectMethodsCache.containsKey(clazz)) {
+            final SoftReference<Method[]> ref = reflectMethodsCache.get(clazz);
             if (ref.get() != null) {
                 return ref.get();
             }
         }
-        final Method[] declaredMethods = clazz.getDeclaredMethods();
-        reflectDeclareCache.put(clazz, new SoftReference<>(declaredMethods));
+        final Method[] declaredMethods = clazz.getMethods();
+        reflectMethodsCache.put(clazz, new SoftReference<>(declaredMethods));
         return declaredMethods;
     }
 
-    static Seq<Method> declaredPublicMethods(Class<?> clazz) {
-        return Seq.of(getDeclareMethods(clazz))
+    static Seq<Method> publicMethods(Class<?> clazz) {
+        return Seq.of(getMethods(clazz))
             .filter(ReflectUtil::publicMethodPredicate);
     }
 
-    static Seq<Method> declaredGetterMethods(Class<?> clazz) {
+    static Seq<Method> getterMethods(Class<?> clazz) {
         if (reflectGetterCache.containsKey(clazz)) {
             final SoftReference<List<Method>> ref = reflectGetterCache.get(clazz);
             if (ref.get() != null) return Seq.seq(ref.get());
         }
-        final List<Method> list = declaredPublicMethods(clazz)
+        final List<Method> list = publicMethods(clazz)
             .filter(getterPredicate.get()).toList();
         reflectGetterCache.put(clazz, new SoftReference<>(list));
         return Seq.seq(list);
@@ -76,6 +78,19 @@ public interface ReflectUtil {
         return name.startsWith("is") ? name.substring(2)
             : name.startsWith("get") ? name.substring(3) : name;
     }
+
+    List<String> CommonMethodName = Arrays.asList(
+        "hashCode",
+        "clone",
+        "toString",
+        "equals",
+        "wait",
+        "notify",
+        "notifyAll",
+        "getClass",
+        "finalize",
+        "canEqual"
+    );
 
     @SneakyThrows
     static Object sneakyInvoker(Object instance, Method method, Object... args) {

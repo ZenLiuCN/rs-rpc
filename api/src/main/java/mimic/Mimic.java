@@ -11,6 +11,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
+import static mimic.ReflectUtil.CommonMethodName;
+
 /**
  * Mimic is a Nest Deep Delegator with only getters supported<br>
  * 1. support interface in getters <br>
@@ -62,7 +64,7 @@ public class Mimic<T> implements InvocationHandler, Delegator<T> {
         int length = (args == null ? 0 : args.length);
         if (length == 0 && name.startsWith("is")) {
             return NULL.restore(values.get(name.substring(2)));
-        } else if (length == 0 && name.startsWith("get")) {
+        } else if (length == 0 && name.startsWith("get") && !name.endsWith("Class")) {
             final String field = name.substring(3);
             final Object v = NULL.restore(values.get(field));
             if (deep.containsKey(field)) {
@@ -70,7 +72,7 @@ public class Mimic<T> implements InvocationHandler, Delegator<T> {
             } else {
                 return NULL.restore(v);
             }
-        } else if (length == 0) {
+        } else if (length == 0 && !CommonMethodName.contains(name)) {
             final Object v = NULL.restore(values.get(name));
             if (deep.containsKey(name)) {
                 return deep.get(name).delegate.apply(v);
@@ -80,35 +82,16 @@ public class Mimic<T> implements InvocationHandler, Delegator<T> {
         } else if (length == 1 && name.startsWith("set")) {
             String field = name.substring(3);
             final Object v = args[0];
-            if (v == null) {
-                values.put(field, NULL.Null);
-                return null;
-            }
-            final Object mimic = MimicUtil.autoMimic(v);
-            values.put(field, mimic);
-            if (mimic instanceof Mimic) {
-                if (v instanceof List) {
-                    deep.put(field, MimicUtil.DeepType.LIST);
-                } else if (v instanceof Map.Entry) {
-                    deep.put(field, MimicUtil.DeepType.ENTRY);
-                } else if (v instanceof Tuple) {
-                    deep.put(field, MimicUtil.DeepType.TUPLE);
-                } else if (v instanceof Optional) {
-                    deep.put(field, MimicUtil.DeepType.OPTIONAL);
-                } else if (v instanceof Map) {
-                    deep.put(field, MimicUtil.DeepType.MAP);
-                } else {
-                    deep.put(field, MimicUtil.DeepType.VALUE);
-                }
-            }
+            setValue(field, v);
             return null;
-
+        } else if (length == 1 && !CommonMethodName.contains(name)) {
+            final Object v = args[0];
+            setValue(name, v);
+            return null;
         } else if (length == 0 && name.equals("toString")) {
             return type + values.toString();
         } else if (method.isDefault()) {
-            if (result == null) {
-                getResult();
-            }
+            getResult();
             try {
                 if (constructor == null)
                     constructor = accessible(MethodHandles.Lookup.class.getDeclaredConstructor(Class.class, int.class));
@@ -123,6 +106,30 @@ public class Mimic<T> implements InvocationHandler, Delegator<T> {
             }
         } else {
             throw new IllegalStateException("not accepted call:" + name);
+        }
+    }
+
+    private void setValue(String field, Object value) {
+        if (value == null) {
+            values.put(field, NULL.Null);
+            return;
+        }
+        final Object mimic = MimicUtil.autoMimic(value);
+        values.put(field, mimic);
+        if (mimic instanceof Mimic) {
+            if (value instanceof List) {
+                deep.put(field, MimicUtil.DeepType.LIST);
+            } else if (value instanceof Map.Entry) {
+                deep.put(field, MimicUtil.DeepType.ENTRY);
+            } else if (value instanceof Tuple) {
+                deep.put(field, MimicUtil.DeepType.TUPLE);
+            } else if (value instanceof Optional) {
+                deep.put(field, MimicUtil.DeepType.OPTIONAL);
+            } else if (value instanceof Map) {
+                deep.put(field, MimicUtil.DeepType.MAP);
+            } else {
+                deep.put(field, MimicUtil.DeepType.VALUE);
+            }
         }
     }
 

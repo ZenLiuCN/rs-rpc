@@ -2,7 +2,6 @@ package mimic;
 
 import lombok.SneakyThrows;
 import lombok.ToString;
-import org.jooq.lambda.Seq;
 import org.jooq.lambda.Sneaky;
 import org.jooq.lambda.tuple.Tuple2;
 
@@ -19,6 +18,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static mimic.Mimic.accessible;
+import static mimic.ReflectUtil.getterMethods;
 import static org.jooq.lambda.tuple.Tuple.tuple;
 
 /**
@@ -38,16 +38,13 @@ public final class Proxy<T> implements InvocationHandler, Delegator<T> {
      * Delegate target type
      */
     public final Class<T> type;
-    /**
-     * 值
-     */
-    public final Map<String, Object> values;
+    public final ConcurrentHashMap<String, Object> values;
     private Constructor<MethodHandles.Lookup> constructor;
     private transient Object[] result;
 
     Proxy(Class<T> type) {
         this.type = type;
-        this.values = new HashMap<>();
+        this.values = new ConcurrentHashMap<>();
     }
 
     Proxy(Class<T> type, Map<String, Object> values) {
@@ -100,7 +97,7 @@ public final class Proxy<T> implements InvocationHandler, Delegator<T> {
         if (copier.containsKey(face)) {
             return copier.get(face).apply(instance);
         }
-        final List<Tuple2<String, Function<Object, Object>>> m = Seq.of(face.getMethods()).map(x ->
+        final List<Tuple2<String, Function<Object, Object>>> m = getterMethods(face).map(x ->
             x.getName().startsWith("is") ? tuple(x.getName().substring(2), Sneaky.function(x::invoke)) :
                 x.getName().startsWith("get") ? tuple(x.getName().substring(3), Sneaky.function(x::invoke)) : null
         ).filter(Objects::nonNull).collect(Collectors.toList());

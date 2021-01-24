@@ -215,7 +215,7 @@ public interface MimicUtil {
         if (delegator.containsKey(type)) {
             return (Mimic<T>) delegator.get(type).apply(instance);
         }
-        final List<Method> methods = declaredGetterMethods(type).toList();
+        final List<Method> methods = getterMethods(type).toList();
         Function<Object, Mimic<?>> delegateBuilder = x -> {
             final ConcurrentHashMap<String, Object> values = new ConcurrentHashMap<>();
             final HashMap<String, DeepType> typeMap = new HashMap<>();
@@ -318,8 +318,8 @@ public interface MimicUtil {
             || !interfaceNamePredicate.get().test(interfaces[0].getName())) {
             return null;
         } else {//check if a full instance
-            final List<String> lists = declaredGetterMethods(clazz).map(Method::getName).collect(Collectors.toList());
-            final long cnt = declaredGetterMethods(interfaces[0]).filter(x -> !lists.contains(x.getName())).count();
+            final List<String> lists = getterMethods(clazz).map(Method::getName).collect(Collectors.toList());
+            final long cnt = getterMethods(interfaces[0]).filter(x -> !lists.contains(x.getName())).count();
             if (cnt > 0) {
                 reflectInterfaceCache.put(clazz, null);
                 return null;
