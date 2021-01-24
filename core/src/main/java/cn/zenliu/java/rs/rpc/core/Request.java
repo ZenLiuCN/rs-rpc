@@ -7,6 +7,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.val;
 import org.jetbrains.annotations.Nullable;
+import org.jooq.lambda.Seq;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -30,9 +31,17 @@ class Request {
      */
     final Object[] arguments;
 
+    public Object[] getArguments() {
+        if (arguments == null || arguments.length == 0) return arguments;
+        return Seq.of(arguments).map(x ->
+            x instanceof NULL ? null :
+                Rpc.autoDelegate.get() ? Mimic.autoDelegate(x) : x
+        ).toArray();
+    }
+
     public static Payload build(String domain, String scope, Object[] arguments, boolean trace) {
         final Request request = Request.builder()
-            .arguments(arguments)
+            .arguments(proc(arguments))
             .build();
         val meta = Meta.builder().sign(domain).from(scope);
         if (trace) meta.trace(true);
@@ -63,5 +72,18 @@ class Request {
         return "REQUEST@" + timestamp + '{' + Arrays.toString(arguments) + '}';
     }
 
+    static Object[] proc(Object[] arguments) {
+        if (arguments == null || arguments.length == 0) return arguments;
+        return Seq.of(arguments).map(x ->
+            x == null ? NULL.instance :
+                Rpc.autoDelegate.get() ? Mimic.autoBuild(x) : x
+        ).toArray();
+    }
+
+    //use to hold a NULL place , request argument sequence is important
+    static final class NULL {
+        //https://github.com/kshchepanovskyi/protostuff-googlecode-exported/issues/141
+        static final NULL instance = new NULL();
+    }
 }
 

@@ -1,12 +1,13 @@
 package cn.zenliu.java.rs.rpc.core;
 
-import cn.zenliu.java.rs.rpc.api.Delegator;
 import cn.zenliu.java.rs.rpc.api.JvmUnique;
 import cn.zenliu.java.rs.rpc.api.Scope;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Predicate;
 
 /**
  * @author Zen.Liu
@@ -21,6 +22,25 @@ public interface Rpc {
     Scope Global = ScopeImpl.builder().name(JvmUnique.uniqueNameWithRandom(GLOBAL_NAME)).route(true).build();
     Map<String, Scope> scopes = new ConcurrentHashMap<>(2);
     boolean withGlobal = internal.nothing();
+    AtomicBoolean autoDelegate = new AtomicBoolean(false);
+
+    /**
+     * use auto delegate for remote all(default false)
+     *
+     * @param use does use
+     */
+    static void setAutoDelegate(boolean use) {
+        autoDelegate.set(use);
+    }
+
+    /**
+     * setting auto delegate interfaces predication
+     *
+     * @param predicate the method
+     */
+    static void setMimicInterfaces(Predicate<String> predicate) {
+        Mimic.delegateInterfaceName.set(predicate == null ? x -> true : predicate);
+    }
 
     /**
      * create a new Scope
@@ -63,7 +83,7 @@ public interface Rpc {
     }
 
     /**
-     * Create Delegator from Instance with Class
+     * Create Light Delegator from Instance with Class
      *
      * @return Proxy with data from Instance
      */
@@ -72,7 +92,7 @@ public interface Rpc {
     }
 
     /**
-     * Create Delegator from Map Data with Class
+     * Create Light Delegator from Map Data with Class
      *
      * @param values              data ( key is PascalCase)
      * @param noneNestedInterface none nested Interface
@@ -84,12 +104,34 @@ public interface Rpc {
     }
 
     /**
-     * Create Delegator of Class
+     * Create Light Delegator of Class
      *
      * @param noneNestedInterfaceObject none nested Interface
-     * @return Proxy without data
+     * @return Proxy with data from instance
      */
     static <T> T delegate(T noneNestedInterfaceObject) {
         return Delegator.proxy(noneNestedInterfaceObject);
+    }
+
+    /**
+     * Create Deep Delegator of Class
+     *
+     * @param interfaceInstance instance
+     * @return Proxy without data
+     */
+    @SuppressWarnings("unchecked")
+    static <T> T delegateDeep(T interfaceInstance) {
+        return (T) Mimic.autoBuild(interfaceInstance);
+    }
+
+    /**
+     * Create Light Delegator from Instance with Class
+     *
+     * @param instance      the instance
+     * @param interfaceType the interface type of instance
+     * @return Proxy with data from Instance
+     */
+    static <T> T delegateDeep(T instance, Class<T> interfaceType) {
+        return Mimic.build(instance, interfaceType).delegate();
     }
 }

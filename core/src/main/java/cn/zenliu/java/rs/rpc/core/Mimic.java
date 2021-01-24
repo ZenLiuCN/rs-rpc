@@ -1,4 +1,4 @@
-package cn.zenliu.java.rs.rpc.api;
+package cn.zenliu.java.rs.rpc.core;
 
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
@@ -11,7 +11,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
+import java.util.function.Predicate;
 
 /**
  * Mimic is a Nest Deep Delegator<br>
@@ -25,7 +27,7 @@ import java.util.function.Function;
  * @since 2021-01-24
  */
 @Slf4j
-public class Mimic<T> implements InvocationHandler {
+public class Mimic<T> implements InvocationHandler, cn.zenliu.java.rs.rpc.api.Delegator<T> {
     private final Class<T> type;
     private final Map<String, Object> values;
     private final Map<String, Integer> deep;
@@ -121,6 +123,7 @@ public class Mimic<T> implements InvocationHandler {
     /**
      * create proxy instance from mimic
      */
+    @Override
     public T delegate() {
         return type.cast(getResult()[0]);
     }
@@ -208,4 +211,41 @@ public class Mimic<T> implements InvocationHandler {
         return method.invoke(instance, args);
     }
 
+    public static AtomicReference<Predicate<String>> delegateInterfaceName = new AtomicReference<>(x -> true);
+
+    @SuppressWarnings("unchecked")
+    public static Object autoBuild(Object instance) {
+        if (instance == null) return instance;
+        final Class<?> aClass = instance.getClass();
+        if (aClass.isPrimitive() || aClass.isEnum() || aClass.isArray()) return instance;
+        if (List.class.isAssignableFrom(aClass)) {
+            List<Object> a = (List<Object>) instance;
+            if (a.isEmpty()) return instance;
+            return Seq.seq(a).map(Mimic::autoBuild).toList();
+        } else if (Map.class.isAssignableFrom(aClass)) {
+            Map<Object, Object> a = (Map<Object, Object>) instance;
+            if (a.isEmpty()) return instance;
+            return Seq.seq(a).map(x -> x.map2(Mimic::autoBuild)).toMap(Tuple2::v1, Tuple2::v2);
+        }
+        final Class<?>[] interfaces = aClass.getInterfaces();
+        if (interfaces == null || interfaces.length == 0 || !delegateInterfaceName.get().test(interfaces[0].getName()))
+            return instance;
+        return build(instance, interfaces[0]);
+    }
+
+    @SuppressWarnings({"DuplicatedCode", "unchecked"})
+    public static Object autoDelegate(Object instance) {
+        if (instance instanceof Mimic) {
+            return ((Mimic<?>) instance).delegate();
+        } else if (instance instanceof Map) {
+            Map<Object, Object> a = (Map<Object, Object>) instance;
+            if (a.isEmpty()) return instance;
+            return Seq.seq(a).map(x -> x.map2(Mimic::autoDelegate)).toMap(Tuple2::v1, Tuple2::v2);
+        } else if (instance instanceof List) {
+            List<Object> a = (List<Object>) instance;
+            if (a.isEmpty()) return instance;
+            return Seq.seq(a).map(Mimic::autoDelegate).toList();
+        }
+        return instance;
+    }
 }

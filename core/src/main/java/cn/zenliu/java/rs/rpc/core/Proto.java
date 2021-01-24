@@ -1,7 +1,5 @@
 package cn.zenliu.java.rs.rpc.core;
 
-import cn.zenliu.java.rs.rpc.api.Delegator;
-import cn.zenliu.java.rs.rpc.api.Mimic;
 import io.protostuff.LinkedBuffer;
 import io.protostuff.ProtostuffIOUtil;
 import io.protostuff.Schema;
@@ -39,7 +37,7 @@ public interface Proto {
     }
 
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "rawtypes"})
     static <T> T from(byte[] data, Class<T> clz) {
         Schema<Object> schema;
         if (clz.isInterface()) {
@@ -64,14 +62,6 @@ public interface Proto {
             return (T) ((Mimic) o).delegate();
         }
         return (T) o;
-    }
-
-    static Object from(byte[] data, String clz) {
-        final Schema<Object> schema = internal.schemaOf.apply(clz);
-        if (schema == null) throw new IllegalStateException("not found schema for type: " + clz);
-        Object o = schema.newMessage();
-        ProtostuffIOUtil.mergeFrom(data, o, schema);
-        return o;
     }
 
 

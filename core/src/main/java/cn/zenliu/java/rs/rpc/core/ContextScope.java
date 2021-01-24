@@ -39,7 +39,7 @@ public interface ContextScope extends ContextRoutes {
                 , null
                 , x -> {
                     try {
-                        handler.apply(request.arguments);
+                        handler.apply(request.getArguments());
                         if ((getDebug().get() || getTrace().get()) || meta.trace) {
                             x.info("remote trace \n META: {} \n TIME COST: {}", meta, meta.costNow());
                         }
@@ -80,7 +80,7 @@ public interface ContextScope extends ContextRoutes {
                 , null
                 , x -> {
                     try {
-                        final Result<Object> res = handler.apply(request.arguments);
+                        final Result<Object> res = handler.apply(request.getArguments());
                         return Mono.just(Response.build(meta, (getDebug().get() || getTrace().get() || meta.trace) ? getName() : null, res != null ? res : Result.ok(null)));
                     } catch (Exception ex) {
                         x.error("error on process RequestAndResponse:" + LOG_META_REQUEST, meta, request, remote, ex);
@@ -136,7 +136,7 @@ public interface ContextScope extends ContextRoutes {
                     }
                     final Response response = Response.parse(result);
                     x.debug("remote call \n DOMAIN: {} \n ARGUMENTS: {} \n RESULT: {} \n SERVICE:{}", sign, args, response, remote);
-                    return response.response;
+                    return response.getResponse();
                 })
         );
     }

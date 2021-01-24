@@ -1,6 +1,6 @@
 package cn.zenliu.java.rs.rpc.rpc;
 
-import cn.zenliu.java.rs.rpc.api.Delegator;
+import cn.zenliu.java.rs.rpc.core.Delegator;
 import cn.zenliu.java.rs.rpc.core.Proto;
 import org.jooq.lambda.Seq;
 import org.jooq.lambda.tuple.Tuple2;
