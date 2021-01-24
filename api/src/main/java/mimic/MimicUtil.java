@@ -13,6 +13,7 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 import static mimic.ReflectUtil.*;
+import static org.jooq.lambda.tuple.Tuple.tuple;
 
 /**
  * @author Zen.Liu
@@ -269,24 +270,24 @@ public interface MimicUtil {
     enum DeepType {
         UNK(x -> x, x -> x),
         MAP(
-            x -> x == null ? null : Seq.seq((Map<Object, Object>) x).map(e -> e.map1(MimicUtil::autoMimic).map2(MimicUtil::autoMimic)).toMap(Tuple2::v1, Tuple2::v2),
-            x -> x == null ? null : Seq.seq((Map<Object, Object>) x).map(e -> e.map1(MimicUtil::autoDelegate).map2(MimicUtil::autoDelegate)).toMap(Tuple2::v1, Tuple2::v2)
+            x -> x == null ? Collections.emptyMap() : Seq.seq((Map<Object, Object>) x).map(e -> e.map1(MimicUtil::autoMimic).map2(MimicUtil::autoMimic)).toMap(Tuple2::v1, Tuple2::v2),
+            x -> x == null ? Collections.emptyMap() : Seq.seq((Map<Object, Object>) x).map(e -> e.map1(MimicUtil::autoDelegate).map2(MimicUtil::autoDelegate)).toMap(Tuple2::v1, Tuple2::v2)
         ),
         ENTRY(
             x -> x == null ? null : new AbstractMap.SimpleEntry<>(MimicUtil.autoMimic(((Entry<Object, Object>) x).getKey()), MimicUtil.autoMimic(((Entry<Object, Object>) x).getValue())),
             x -> x == null ? null : new AbstractMap.SimpleEntry<>(MimicUtil.autoDelegate(((Entry<Object, Object>) x).getKey()), MimicUtil.autoDelegate(((Entry<Object, Object>) x).getValue()))
         ),
         OPTIONAL(
-            x -> x == null ? null : ((Optional<Object>) x).map(MimicUtil::autoMimic),
-            x -> x == null ? null : ((Optional<Object>) x).map(MimicUtil::autoDelegate)
+            x -> x == null ? Optional.empty() : ((Optional<Object>) x).map(MimicUtil::autoMimic),
+            x -> x == null ? Optional.empty() : ((Optional<Object>) x).map(MimicUtil::autoDelegate)
         ),
         LIST(
-            x -> x == null ? null : Seq.seq((List<Object>) x).map(MimicUtil::autoMimic).toList(),
-            x -> x == null ? null : Seq.seq((List<Object>) x).map(MimicUtil::autoDelegate).toList()
+            x -> x == null ? Collections.emptyList() : Seq.seq((List<Object>) x).map(MimicUtil::autoMimic).toList(),
+            x -> x == null ? Collections.emptyList() : Seq.seq((List<Object>) x).map(MimicUtil::autoDelegate).toList()
         ),
         TUPLE(
-            x -> x == null ? null : Tuple.tuple(Seq.of(((Tuple) x).toArray()).map(MimicUtil::autoMimic).toArray()),
-            x -> x == null ? null : Tuple.tuple(Seq.of(((Tuple) x).toArray()).map(MimicUtil::autoDelegate).toArray())
+            x -> x == null ? null : tuple(Seq.of(((Tuple) x).toArray()).map(MimicUtil::autoMimic).toArray()),
+            x -> x == null ? null : tuple(Seq.of(((Tuple) x).toArray()).map(MimicUtil::autoDelegate).toArray())
         ),
         VALUE(MimicUtil::autoMimic, MimicUtil::autoDelegate);
         public final Function<Object, Object> mimic;
