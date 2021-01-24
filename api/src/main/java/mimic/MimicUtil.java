@@ -222,6 +222,10 @@ public interface MimicUtil {
                 final String field = method.getName().startsWith("is") ? method.getName().substring(2) : method.getName().substring(3);
                 final Object value = sneakyInvoker(x, method);
                 final Class<?> rType = method.getReturnType();
+                if (value == null) {
+                    values.put(field, NULL.instance);
+                    continue;
+                }
                 if (value instanceof Tuple) {
                     values.put(field, DeepType.TUPLE.mimic.apply(value));
                     typeMap.put(field, DeepType.TUPLE);

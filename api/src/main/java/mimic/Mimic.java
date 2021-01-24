@@ -57,14 +57,14 @@ public class Mimic<T> implements InvocationHandler, Delegator<T> {
         String name = method.getName();
         int length = (args == null ? 0 : args.length);
         if (length == 0 && name.startsWith("is")) {
-            return values.get(name.substring(2));
+            return NULL.restore(values.get(name.substring(2)));
         } else if (length == 0 && name.startsWith("get")) {
             final String field = name.substring(3);
-            final Object v = values.get(field);
+            final Object v = NULL.restore(values.get(field));
             if (deep.containsKey(field)) {
                 return deep.get(field).delegate.apply(v);
             } else {
-                return v;
+                return NULL.restore(v);
             }
         } else if (length == 1 && name.startsWith("set")) {
             throw new IllegalAccessError("not support setter with mimic !");
