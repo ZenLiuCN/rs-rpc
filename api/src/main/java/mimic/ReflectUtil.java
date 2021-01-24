@@ -23,13 +23,15 @@ public interface ReflectUtil {
     static boolean javaBeanGetterPredicate(Method method) {
         return method.getParameterCount() == 0
             && method.getReturnType() != Void.TYPE
+            && !CommonMethodName.contains(method.getName())
             && (method.getName().startsWith("is") || method.getName().startsWith("get"));
     }
 
     static boolean fluentBeanGetterPredicate(Method method) {
         return
             method.getParameterCount() == 0
-                && method.getReturnType() != Void.TYPE;
+                && method.getReturnType() != Void.TYPE
+                && !CommonMethodName.contains(method.getName());
     }
 
     static boolean publicMethodPredicate(Method method) {
