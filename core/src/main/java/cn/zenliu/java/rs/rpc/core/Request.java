@@ -77,7 +77,7 @@ class Request {
     static Object[] proc(Object[] arguments) {
         if (arguments == null || arguments.length == 0) return arguments;
         return Seq.of(arguments).map(x ->
-            x == null ? NULL.instance :
+            x == null ? NULL.Null :
                 Rpc.autoDelegate.get() ? MimicUtil.autoMimic(x) : x
         ).toArray();
     }

@@ -224,7 +224,7 @@ public interface MimicUtil {
                 final Object value = sneakyInvoker(x, method);
                 final Class<?> rType = method.getReturnType();
                 if (value == null) {
-                    values.put(field, NULL.instance);
+                    values.put(field, NULL.Null);
                     continue;
                 }
                 if (value instanceof Tuple) {

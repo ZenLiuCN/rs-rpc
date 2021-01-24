@@ -2,7 +2,7 @@ package mimic;
 
 //use to hold a NULL place , request argument sequence is important
 public enum NULL {
-    instance;
+    Null;
 
     //https://github.com/kshchepanovskyi/protostuff-googlecode-exported/issues/141
     public static Object restore(Object val) {
@@ -10,6 +10,6 @@ public enum NULL {
     }
 
     public static Object wrap(Object val) {
-        return val == null ? instance : val;
+        return val == null ? Null : val;
     }
 }
