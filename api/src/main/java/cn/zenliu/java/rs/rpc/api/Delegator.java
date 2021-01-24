@@ -20,6 +20,8 @@ import static org.jooq.lambda.tuple.Tuple.tuple;
 
 /**
  * Delegator use to act as Pojo for a Interface.
+ * Delegator is Most simple one, There should no nested interface exists in fields,or exists inside container <br>
+ * For a Complex Structure , use {@link Mimic#build(Object, Class)} for nested delegate.
  *
  * @author Zen.Liu
  * @apiNote Delegator
@@ -32,7 +34,7 @@ public final class Delegator implements InvocationHandler {
      * Copier Cache
      */
     public static final Map<Class<?>, Function<Object, Map<String, Object>>> copier = new ConcurrentHashMap<>();
-    public final Schema type;
+    public final Class<?> type;
     /**
      * 值
      */
@@ -41,22 +43,12 @@ public final class Delegator implements InvocationHandler {
     transient Object[] result = {new Object()};
 
     Delegator(Class<?> type) {
-        this.type = Schema.light(type);
-        this.values = new HashMap<>();
-    }
-
-    Delegator(Schema type) {
         this.type = type;
         this.values = new HashMap<>();
-    }
-
-    Delegator(Schema type, Map<String, Object> values) {
-        this.type = type;
-        this.values = values == null ? new ConcurrentHashMap<>() : new ConcurrentHashMap<>(values);
     }
 
     Delegator(Class<?> type, Map<String, Object> values) {
-        this.type = Schema.light(type);
+        this.type = type;
         this.values = values == null ? new ConcurrentHashMap<>() : new ConcurrentHashMap<>(values);
     }
 
@@ -72,9 +64,6 @@ public final class Delegator implements InvocationHandler {
         return new Delegator(clz, init).proxy(clz);
     }
 
-    public static <T> T proxy(Schema<T> clz, Map<String, Object> init) {
-        return new Delegator(clz, init).proxy(clz.type);
-    }
 
     /**
      * Build a Delegate Proxy via Instance values
@@ -86,10 +75,6 @@ public final class Delegator implements InvocationHandler {
      */
     public static <T> T proxy(Class<T> clz, T instance) {
         return new Delegator(clz, copy(instance, clz)).proxy(clz);
-    }
-
-    public static <T> T proxy(Schema<T> clz, T instance) {
-        return new Delegator(clz, copy(instance, clz.type)).proxy(clz.type);
     }
 
     /**
@@ -165,7 +150,7 @@ public final class Delegator implements InvocationHandler {
      */
     @SneakyThrows
     public Object delegate() {
-        return proxy(type.type);
+        return proxy(type);
     }
 
     @Override
@@ -179,11 +164,11 @@ public final class Delegator implements InvocationHandler {
         } else if (length == 1 && name.startsWith("set")) {
             return values.put(name.substring(3), args);
         } else if (length == 0 && name.equals("toString")) {
-            return type.type + values.toString();
+            return type + values.toString();
         } else if (method.isDefault()) {
             if (result == null) {
                 result = new Object[1];
-                result[0] = Proxy.newProxyInstance(type.type.getClassLoader(), new Class[]{type.type}, this);
+                result[0] = Proxy.newProxyInstance(type.getClassLoader(), new Class[]{type}, this);
             }
             try {
                 if (constructor == null)

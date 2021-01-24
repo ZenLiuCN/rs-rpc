@@ -1,6 +1,7 @@
 package cn.zenliu.java.rs.rpc.core;
 
 import cn.zenliu.java.rs.rpc.api.Delegator;
+import cn.zenliu.java.rs.rpc.api.Mimic;
 import io.protostuff.LinkedBuffer;
 import io.protostuff.ProtostuffIOUtil;
 import io.protostuff.Schema;
@@ -10,7 +11,6 @@ import io.protostuff.runtime.RuntimeSchema;
 import org.jooq.lambda.Sneaky;
 
 import java.lang.reflect.Field;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
@@ -28,12 +28,10 @@ public interface Proto {
         } catch (Exception ex) {
             instance = o;
         }
-
-        final Object target = instance;
-        final Schema<Object> schema = internal.schemaFrom.apply(target);
+        final Schema<Object> schema = internal.schemaFrom.apply(instance);
         if (schema == null) throw new IllegalStateException("not found schema for type: " + o.getClass());
         try {
-            return ProtostuffIOUtil.toByteArray(target, schema, internal.buffer.get());
+            return ProtostuffIOUtil.toByteArray(instance, schema, internal.buffer.get());
         } finally {
             internal.buffer.get().clear();
         }
@@ -43,19 +41,27 @@ public interface Proto {
 
     @SuppressWarnings("unchecked")
     static <T> T from(byte[] data, Class<T> clz) {
-        boolean delegate = false;
-        final Schema<Object> schema;
-        if (clz.isInterface() && !clz.isAssignableFrom(List.class) && !clz.isAssignableFrom(Map.class)) {
-            schema = internal.getSchema(Delegator.class);
+        Schema<Object> schema;
+        if (clz.isInterface()) {
+            schema = internal.getSchema(Mimic.class);
         } else {
             schema = internal.getSchema(clz);
         }
-
         if (schema == null) throw new IllegalStateException("not found schema for type: " + clz);
-        Object o = schema.newMessage();
-        ProtostuffIOUtil.mergeFrom(data, o, schema);
+        Object o = null;
+        try {
+            o = schema.newMessage();
+            ProtostuffIOUtil.mergeFrom(data, o, schema);
+        } catch (Exception e) {
+            schema = internal.getSchema(Delegator.class);
+            if (schema == null) throw new IllegalStateException("not found schema for type: " + clz);
+            o = schema.newMessage();
+            ProtostuffIOUtil.mergeFrom(data, o, schema);
+        }
         if (o instanceof Delegator) {
             return (T) ((Delegator) o).delegate();
+        } else if (o instanceof Mimic) {
+            return (T) ((Mimic) o).delegate();
         }
         return (T) o;
     }
