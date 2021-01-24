@@ -1,6 +1,5 @@
 package mimic;
 
-import cn.zenliu.java.rs.rpc.core.Delegator;
 import lombok.extern.slf4j.Slf4j;
 
 import java.lang.invoke.MethodHandles;
@@ -13,14 +12,14 @@ import java.util.concurrent.ConcurrentHashMap;
  * 1. support interface in getters <br>
  * 2. support interface in Map Value <br>
  * 3. support interface in List Value <br>
- * For Simple Value (means without Interface inside), use {@link Delegator}.
+ * For Simple Value (means without Interface inside), use {@link Proxy}.
  *
  * @author Zen.Liu
  * @apiNote
  * @since 2021-01-24
  */
 @Slf4j
-public class Mimic<T> implements InvocationHandler, cn.zenliu.java.rs.rpc.api.Delegator<T> {
+public class Mimic<T> implements InvocationHandler, Delegator<T> {
     private final Class<T> type;
     private final ConcurrentHashMap<String, Object> values;
     private final HashMap<String, MimicUtil.DeepType> deep;
@@ -32,7 +31,7 @@ public class Mimic<T> implements InvocationHandler, cn.zenliu.java.rs.rpc.api.De
     private Object[] getResult() {
         if (result == null) {
             result = new Object[1];
-            result[0] = Proxy.newProxyInstance(type.getClassLoader(), new Class[]{type}, this);
+            result[0] = java.lang.reflect.Proxy.newProxyInstance(type.getClassLoader(), new Class[]{type}, this);
         }
         return result;
     }

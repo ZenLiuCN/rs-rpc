@@ -1,4 +1,4 @@
-package cn.zenliu.java.rs.rpc.api;
+package mimic;
 
 import org.jetbrains.annotations.Nullable;
 

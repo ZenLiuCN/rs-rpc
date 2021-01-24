@@ -1,11 +1,12 @@
 package cn.zenliu.java.rs.rpc.rpc;
 
-import cn.zenliu.java.rs.rpc.core.Delegator;
+
 import cn.zenliu.java.rs.rpc.core.Proto;
 import io.netty.buffer.ByteBufUtil;
 import io.netty.buffer.Unpooled;
 import mimic.Mimic;
 import mimic.MimicUtil;
+import mimic.Proxy;
 import org.jooq.lambda.Seq;
 import org.jooq.lambda.tuple.Tuple2;
 
@@ -56,7 +57,6 @@ public class DelegatorTest {
     }
 
 
-
     public static void main(String[] args) {
         generate();
         // validate();
@@ -73,7 +73,7 @@ public class DelegatorTest {
     }
 
     static void generate() {
-        final Dictionary d = Delegator.proxy(Dictionary.class, Seq.of(
+        final Dictionary d = Proxy.of(Dictionary.class, Seq.of(
             tuple("Id", 123L),
             tuple("SystemIdentity", 123L),
             tuple("Name", "A"),
@@ -83,7 +83,7 @@ public class DelegatorTest {
             tuple("NumericKey", false),
             tuple("ValueClass", String.class)
         ).toMap(Tuple2::v1, Tuple2::v2));
-        final Dictionary d2 = Delegator.proxy(Dictionary.class, Seq.of(
+        final Dictionary d2 = Proxy.of(Dictionary.class, Seq.of(
             tuple("Id", 124L),
             tuple("SystemIdentity", 123L),
             tuple("Name", "A"),
@@ -93,7 +93,7 @@ public class DelegatorTest {
             tuple("NumericKey", false),
             tuple("ValueClass", String.class),
             tuple("Items", Arrays.asList(
-                Delegator.proxy(Item.class, Seq.of(
+                Proxy.of(Item.class, Seq.of(
                     tuple("Id", 123L),
                     tuple("Name", "A"),
                     tuple("Disc", "A")

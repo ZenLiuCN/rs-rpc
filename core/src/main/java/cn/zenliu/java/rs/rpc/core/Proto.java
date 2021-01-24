@@ -6,7 +6,9 @@ import io.protostuff.Schema;
 import io.protostuff.runtime.DefaultIdStrategy;
 import io.protostuff.runtime.IdStrategy;
 import io.protostuff.runtime.RuntimeSchema;
+import mimic.Delegator;
 import mimic.Mimic;
+import mimic.Proxy;
 import org.jooq.lambda.Sneaky;
 
 import java.lang.reflect.Field;
@@ -52,15 +54,13 @@ public interface Proto {
             o = schema.newMessage();
             ProtostuffIOUtil.mergeFrom(data, o, schema);
         } catch (Exception e) {
-            schema = internal.getSchema(Delegator.class);
+            schema = internal.getSchema(Proxy.class);
             if (schema == null) throw new IllegalStateException("not found schema for type: " + clz);
             o = schema.newMessage();
             ProtostuffIOUtil.mergeFrom(data, o, schema);
         }
         if (o instanceof Delegator) {
             return (T) ((Delegator) o).delegate();
-        } else if (o instanceof Mimic) {
-            return (T) ((Mimic) o).delegate();
         }
         return (T) o;
     }

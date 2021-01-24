@@ -1,13 +1,15 @@
-package cn.zenliu.java.rs.rpc.core;
+package mimic;
 
+import lombok.SneakyThrows;
 import lombok.ToString;
-import mimic.MimicUtil;
 import org.jooq.lambda.Seq;
 import org.jooq.lambda.Sneaky;
 import org.jooq.lambda.tuple.Tuple2;
 
 import java.lang.invoke.MethodHandles;
-import java.lang.reflect.*;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -16,40 +18,50 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static mimic.Mimic.accessible;
 import static org.jooq.lambda.tuple.Tuple.tuple;
 
 /**
  * Delegator use to act as Pojo for a Interface.
- * Delegator is Most simple one, There should no nested interface exists in fields,or exists inside container <br>
- * For a Complex Structure , use {@link MimicUtil#mimic(Object, Class)} for nested delegate.
  *
  * @author Zen.Liu
  * @apiNote Delegator
  * @since 2021-01-12
  */
-
 @ToString
-public final class Delegator<T> implements InvocationHandler, cn.zenliu.java.rs.rpc.api.Delegator<T> {
+public final class Proxy<T> implements InvocationHandler, Delegator<T> {
     /**
      * Copier Cache
      */
     public static final Map<Class<?>, Function<Object, Map<String, Object>>> copier = new ConcurrentHashMap<>();
+    /**
+     * Delegate target type
+     */
     public final Class<T> type;
     /**
      * 值
      */
     public final Map<String, Object> values;
     private Constructor<MethodHandles.Lookup> constructor;
-    transient Object[] result;
+    private transient Object[] result;
 
-    Delegator(Class<T> type) {
+    Proxy(Class<T> type) {
         this.type = type;
         this.values = new HashMap<>();
     }
 
-    Delegator(Class<T> type, Map<String, Object> values) {
+    Proxy(Class<T> type, Map<String, Object> values) {
         this.type = type;
         this.values = values == null ? new ConcurrentHashMap<>() : new ConcurrentHashMap<>(values);
+    }
+
+    @SuppressWarnings("unchecked")
+    private T getResult() {
+        if (result == null) {
+            result = new Object[1];
+            result[0] = java.lang.reflect.Proxy.newProxyInstance(type.getClassLoader(), new Class[]{type}, this);
+        }
+        return (T) result[0];
     }
 
     /**
@@ -60,10 +72,10 @@ public final class Delegator<T> implements InvocationHandler, cn.zenliu.java.rs.
      * @param <T>  Delegate type
      * @return Proxy Instance
      */
-    public static <T> T proxy(Class<T> clz, Map<String, Object> init) {
-        return new Delegator<>(clz, init).delegate();
-    }
 
+    public static <T> T of(Class<T> clz, Map<String, Object> init) {
+        return new Proxy<>(clz, init).delegate();
+    }
 
     /**
      * Build a Delegate Proxy via Instance values
@@ -73,8 +85,8 @@ public final class Delegator<T> implements InvocationHandler, cn.zenliu.java.rs.
      * @param <T>      Delegate type
      * @return Proxy Instance
      */
-    public static <T> T proxy(Class<T> clz, T instance) {
-        return new Delegator<>(clz, copy(instance, clz)).delegate();
+    public static <T> T of(Class<T> clz, T instance) {
+        return new Proxy<>(clz, copy(instance, clz)).getResult();
     }
 
     /**
@@ -82,7 +94,7 @@ public final class Delegator<T> implements InvocationHandler, cn.zenliu.java.rs.
      *
      * @param instance target Instance
      * @param face     interface of Instance
-     * @return data, which use for {@link Delegator#proxy}
+     * @return data, which use for {@link Proxy#of}
      */
     public static Map<String, Object> copy(Object instance, Class<?> face) {
         if (copier.containsKey(face)) {
@@ -106,50 +118,18 @@ public final class Delegator<T> implements InvocationHandler, cn.zenliu.java.rs.
     }
 
     @SuppressWarnings("unchecked")
-    public static <T> T proxy(T noneNestedInterfaceObject) {
+    public static <T> T of(T noneNestedInterfaceObject) {
         final Class<?> iface = noneNestedInterfaceObject.getClass().getInterfaces()[0];
-        if (!MimicUtil.interfaceNamePredicate.get().test(iface.getCanonicalName())) {
-            return noneNestedInterfaceObject;
-        }
-        return proxy((Class<T>) iface, noneNestedInterfaceObject);
+        return of((Class<T>) iface, noneNestedInterfaceObject);
     }
 
-    static <T extends AccessibleObject> T accessible(T accessible) {
-        if (accessible == null) {
-            return null;
-        }
-
-        if (accessible instanceof Member) {
-            Member member = (Member) accessible;
-
-            if (Modifier.isPublic(member.getModifiers()) &&
-                Modifier.isPublic(member.getDeclaringClass().getModifiers())) {
-                return accessible;
-            }
-        }
-
-        // [jOOQ #3392] The accessible flag is set to false by default, also for public members.
-        if (!accessible.isAccessible())
-            accessible.setAccessible(true);
-        return accessible;
-    }
-
-
-    Object getResult() {
-        if (result == null) {
-            result = new Object[1];
-            result[0] = Proxy.newProxyInstance(type.getClassLoader(), new Class[]{type}, this);
-        }
-        return result[0];
-    }
 
     /**
      * Create a Proxy from current Instance
      */
-    @SuppressWarnings("unchecked")
-    @Override
+    @SneakyThrows
     public T delegate() {
-        return (T) getResult();
+        return getResult();
     }
 
     @Override
@@ -165,10 +145,7 @@ public final class Delegator<T> implements InvocationHandler, cn.zenliu.java.rs.
         } else if (length == 0 && name.equals("toString")) {
             return type + values.toString();
         } else if (method.isDefault()) {
-            if (result == null) {
-                result = new Object[1];
-                result[0] = Proxy.newProxyInstance(type.getClassLoader(), new Class[]{type}, this);
-            }
+            getResult();
             try {
                 if (constructor == null)
                     constructor = accessible(MethodHandles.Lookup.class.getDeclaredConstructor(Class.class, int.class));

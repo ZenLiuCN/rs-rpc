@@ -21,7 +21,7 @@ import static mimic.ReflectUtil.*;
  */
 public interface MimicUtil {
 
-    AtomicReference<Predicate<String>> interfaceNamePredicate = new AtomicReference<>(x -> true);
+    AtomicReference<Predicate<String>> interfaceNamePredicate = new AtomicReference<>(x -> x.startsWith("com.medtreehealth"));
 
     /**
      * process common container
@@ -304,7 +304,6 @@ public interface MimicUtil {
         if (reflectInterfaceCache.containsKey(clazz)) return reflectInterfaceCache.get(clazz);
         final Class<?>[] interfaces = clazz.getInterfaces();
         if (interfaces == null || interfaces.length == 0 || interfaces[0].getName().startsWith("java.") || !interfaceNamePredicate.get().test(interfaces[0].getName())) {
-            reflectInterfaceCache.put(clazz, null);
             return null;
         } else {//check if a full instance
             final List<String> lists = declaredGetterMethods(clazz).map(Method::getName).collect(Collectors.toList());
@@ -336,7 +335,7 @@ public interface MimicUtil {
 
     static Object autoDelegate(Object instance) {
         if (instance == null) return null;
-        if (instance instanceof cn.zenliu.java.rs.rpc.api.Delegator) {
+        if (instance instanceof Delegator) {
             return ((Mimic<?>) instance).delegate();
         }
         final Object o = containerProcess(instance, MimicUtil::autoDelegate);
