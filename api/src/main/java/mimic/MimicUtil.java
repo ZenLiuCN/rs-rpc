@@ -22,7 +22,7 @@ import static org.jooq.lambda.tuple.Tuple.tuple;
  */
 public interface MimicUtil {
 
-    AtomicReference<Predicate<String>> interfaceNamePredicate = new AtomicReference<>(x -> x.startsWith("com.medtreehealth"));
+    AtomicReference<Predicate<String>> interfaceNamePredicate = new AtomicReference<>(x -> true);
 
     /**
      * process common container
@@ -220,7 +220,7 @@ public interface MimicUtil {
             final ConcurrentHashMap<String, Object> values = new ConcurrentHashMap<>();
             final HashMap<String, DeepType> typeMap = new HashMap<>();
             for (Method method : methods) {
-                final String field = method.getName().startsWith("is") ? method.getName().substring(2) : method.getName().substring(3);
+                final String field = getterNameToFieldName(method.getName());
                 final Object value = sneakyInvoker(x, method);
                 final Class<?> rType = method.getReturnType();
                 if (value == null) {
@@ -308,7 +308,14 @@ public interface MimicUtil {
     static Class<?> findInterface(Class<?> clazz) {
         if (reflectInterfaceCache.containsKey(clazz)) return reflectInterfaceCache.get(clazz);
         final Class<?>[] interfaces = clazz.getInterfaces();
-        if (interfaces == null || interfaces.length == 0 || interfaces[0].getName().startsWith("java.") || !interfaceNamePredicate.get().test(interfaces[0].getName())) {
+        if (interfaces == null || interfaces.length == 0
+            || interfaces[0].getName().startsWith("java.")
+            || interfaces[0].getName().startsWith("com.sun")
+            || interfaces[0].getName().startsWith("sun.")
+            || interfaces[0].getName().startsWith("com.oracle")
+            || interfaces[0].getName().startsWith("jdk.")
+            || interfaces[0].getName().startsWith("javax.")
+            || !interfaceNamePredicate.get().test(interfaces[0].getName())) {
             return null;
         } else {//check if a full instance
             final List<String> lists = declaredGetterMethods(clazz).map(Method::getName).collect(Collectors.toList());

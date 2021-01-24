@@ -1,10 +1,14 @@
 package mimic;
 
 import lombok.extern.slf4j.Slf4j;
+import org.jooq.lambda.tuple.Tuple;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.reflect.*;
 import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -66,9 +70,39 @@ public class Mimic<T> implements InvocationHandler, Delegator<T> {
             } else {
                 return NULL.restore(v);
             }
+        } else if (length == 0) {
+            final Object v = NULL.restore(values.get(name));
+            if (deep.containsKey(name)) {
+                return deep.get(name).delegate.apply(v);
+            } else {
+                return NULL.restore(v);
+            }
         } else if (length == 1 && name.startsWith("set")) {
-            throw new IllegalAccessError("not support setter with mimic !");
-            //return values.put(name.substring(3), args);
+            String field = name.substring(3);
+            final Object v = args[0];
+            if (v == null) {
+                values.put(field, NULL.Null);
+                return null;
+            }
+            final Object mimic = MimicUtil.autoMimic(v);
+            values.put(field, mimic);
+            if (mimic instanceof Mimic) {
+                if (v instanceof List) {
+                    deep.put(field, MimicUtil.DeepType.LIST);
+                } else if (v instanceof Map.Entry) {
+                    deep.put(field, MimicUtil.DeepType.ENTRY);
+                } else if (v instanceof Tuple) {
+                    deep.put(field, MimicUtil.DeepType.TUPLE);
+                } else if (v instanceof Optional) {
+                    deep.put(field, MimicUtil.DeepType.OPTIONAL);
+                } else if (v instanceof Map) {
+                    deep.put(field, MimicUtil.DeepType.MAP);
+                } else {
+                    deep.put(field, MimicUtil.DeepType.VALUE);
+                }
+            }
+            return null;
+
         } else if (length == 0 && name.equals("toString")) {
             return type + values.toString();
         } else if (method.isDefault()) {
