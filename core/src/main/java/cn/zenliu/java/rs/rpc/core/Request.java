@@ -6,6 +6,8 @@ import io.rsocket.util.DefaultPayload;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.val;
+import mimic.MimicUtil;
+import mimic.NULL;
 import org.jetbrains.annotations.Nullable;
 import org.jooq.lambda.Seq;
 
@@ -35,7 +37,7 @@ class Request {
         if (arguments == null || arguments.length == 0) return arguments;
         return Seq.of(arguments).map(x ->
             x instanceof NULL ? null :
-                Rpc.autoDelegate.get() ? Mimic.autoDelegate(x) : x
+                Rpc.autoDelegate.get() ? MimicUtil.autoDelegate(x) : x
         ).toArray();
     }
 
@@ -76,14 +78,10 @@ class Request {
         if (arguments == null || arguments.length == 0) return arguments;
         return Seq.of(arguments).map(x ->
             x == null ? NULL.instance :
-                Rpc.autoDelegate.get() ? Mimic.autoBuild(x) : x
+                Rpc.autoDelegate.get() ? MimicUtil.autoMimic(x) : x
         ).toArray();
     }
 
-    //use to hold a NULL place , request argument sequence is important
-    static final class NULL {
-        //https://github.com/kshchepanovskyi/protostuff-googlecode-exported/issues/141
-        static final NULL instance = new NULL();
-    }
+
 }
 

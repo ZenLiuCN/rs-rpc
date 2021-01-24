@@ -2,6 +2,7 @@ package cn.zenliu.java.rs.rpc.core;
 
 import cn.zenliu.java.rs.rpc.api.JvmUnique;
 import cn.zenliu.java.rs.rpc.api.Scope;
+import mimic.MimicUtil;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.Map;
@@ -39,7 +40,7 @@ public interface Rpc {
      * @param predicate the method
      */
     static void setMimicInterfaces(Predicate<String> predicate) {
-        Mimic.delegateInterfaceName.set(predicate == null ? x -> true : predicate);
+        MimicUtil.interfaceNamePredicate.set(predicate == null ? x -> true : predicate);
     }
 
     /**
@@ -121,7 +122,7 @@ public interface Rpc {
      */
     @SuppressWarnings("unchecked")
     static <T> T delegateDeep(T interfaceInstance) {
-        return (T) Mimic.autoBuild(interfaceInstance);
+        return (T) MimicUtil.autoMimic(interfaceInstance);
     }
 
     /**
@@ -132,6 +133,6 @@ public interface Rpc {
      * @return Proxy with data from Instance
      */
     static <T> T delegateDeep(T instance, Class<T> interfaceType) {
-        return Mimic.build(instance, interfaceType).delegate();
+        return (T) MimicUtil.mimic(instance, interfaceType).delegate();
     }
 }

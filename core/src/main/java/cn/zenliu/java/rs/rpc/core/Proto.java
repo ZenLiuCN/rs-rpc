@@ -6,6 +6,7 @@ import io.protostuff.Schema;
 import io.protostuff.runtime.DefaultIdStrategy;
 import io.protostuff.runtime.IdStrategy;
 import io.protostuff.runtime.RuntimeSchema;
+import mimic.Mimic;
 import org.jooq.lambda.Sneaky;
 
 import java.lang.reflect.Field;

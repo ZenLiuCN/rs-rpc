@@ -2,6 +2,10 @@ package cn.zenliu.java.rs.rpc.rpc;
 
 import cn.zenliu.java.rs.rpc.core.Delegator;
 import cn.zenliu.java.rs.rpc.core.Proto;
+import io.netty.buffer.ByteBufUtil;
+import io.netty.buffer.Unpooled;
+import mimic.Mimic;
+import mimic.MimicUtil;
 import org.jooq.lambda.Seq;
 import org.jooq.lambda.tuple.Tuple2;
 
@@ -51,17 +55,11 @@ public class DelegatorTest {
         }
     }
 
-    static final class Lists {
-        final List<Dictionary> l;
 
-        Lists(List<Dictionary> l) {
-            this.l = l;
-        }
-    }
 
     public static void main(String[] args) {
-        // generate();
-        validate();
+        generate();
+        // validate();
     }
 
     static void validate() {
@@ -106,12 +104,12 @@ public class DelegatorTest {
         System.out.println(Base64.getEncoder().encodeToString(bytes1));
         final Dictionary from1 = Proto.from(bytes1, Dictionary.class);
         System.out.println(from1);
-     /*   final Mimic<Dictionary> mm = Mimic.build(d2, Dictionary.class);
+        final Mimic<Dictionary> mm = MimicUtil.mimic(d2, Dictionary.class);
         System.out.println(mm);
         final byte[] bytes = Proto.to(mm.delegate());
         System.out.println(ByteBufUtil.prettyHexDump(Unpooled.copiedBuffer(bytes)));
         System.out.println(Base64.getEncoder().encodeToString(bytes));
         final Dictionary from = Proto.from(bytes, Dictionary.class);
-        System.out.println(from);*/
+        System.out.println(from);
     }
 }

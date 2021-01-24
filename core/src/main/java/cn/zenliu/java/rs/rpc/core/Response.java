@@ -8,6 +8,7 @@ import io.rsocket.util.DefaultPayload;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
+import mimic.MimicUtil;
 
 /**
  * RPC Response
@@ -28,12 +29,12 @@ final class Response {
     final Result<Object> response;
 
     public Result<Object> getResponse() {
-        return Rpc.autoDelegate.get() ? response.map(Mimic::autoDelegate) : response;
+        return Rpc.autoDelegate.get() ? response.map(MimicUtil::autoDelegate) : response;
     }
 
     public static Payload build(Meta meta, String name, Result<Object> result) {
         return DefaultPayload.create(Proto.to(Response.builder().response(
-            Rpc.autoDelegate.get() ? result.map(Mimic::autoBuild) : result
+            Rpc.autoDelegate.get() ? result.map(MimicUtil::autoMimic) : result
         ).build()), Proto.to(name != null ? meta.addTrace(name) : meta));
     }
 

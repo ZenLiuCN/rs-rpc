@@ -1,6 +1,7 @@
 package cn.zenliu.java.rs.rpc.core;
 
 import lombok.ToString;
+import mimic.MimicUtil;
 import org.jooq.lambda.Seq;
 import org.jooq.lambda.Sneaky;
 import org.jooq.lambda.tuple.Tuple2;
@@ -20,7 +21,7 @@ import static org.jooq.lambda.tuple.Tuple.tuple;
 /**
  * Delegator use to act as Pojo for a Interface.
  * Delegator is Most simple one, There should no nested interface exists in fields,or exists inside container <br>
- * For a Complex Structure , use {@link Mimic#build(Object, Class)} for nested delegate.
+ * For a Complex Structure , use {@link MimicUtil#mimic(Object, Class)} for nested delegate.
  *
  * @author Zen.Liu
  * @apiNote Delegator
@@ -107,7 +108,7 @@ public final class Delegator<T> implements InvocationHandler, cn.zenliu.java.rs.
     @SuppressWarnings("unchecked")
     public static <T> T proxy(T noneNestedInterfaceObject) {
         final Class<?> iface = noneNestedInterfaceObject.getClass().getInterfaces()[0];
-        if (!Mimic.delegateInterfaceName.get().test(iface.getCanonicalName())) {
+        if (!MimicUtil.interfaceNamePredicate.get().test(iface.getCanonicalName())) {
             return noneNestedInterfaceObject;
         }
         return proxy((Class<T>) iface, noneNestedInterfaceObject);
