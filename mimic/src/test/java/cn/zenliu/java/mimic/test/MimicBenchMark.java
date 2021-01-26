@@ -13,19 +13,15 @@ import org.openjdk.jmh.runner.options.TimeValue;
 import java.util.concurrent.TimeUnit;
 
 /**
- * # Run complete. Total time: 00:07:03
+ * Benchmark                  Mode  Cnt   Score   Error  Units
+ * MimicBenchMark.deep2Mimic  avgt   40   9.583 ± 0.998  us/op
+ * MimicBenchMark.deep3Mimic  avgt   40  17.738 ± 2.124  us/op
+ * MimicBenchMark.lightMimic  avgt   40   3.765 ± 0.534  us/op
  * <p>
- * REMEMBER: The numbers below are just data. To gain reusable insights, you need to follow up on
- * why the numbers are the way they are. Use profilers (see -prof, -lprof), design factorial
- * experiments, perform baseline and negative tests that provide experimental control, make sure
- * the benchmarking environment is safe on JVM/OS/HW level, ask for reviews from the domain experts.
- * Do not assume the numbers tell you what you want them to tell.
- * </p><p>
- * Benchmark                  Mode  Cnt   Score    Error  Units
- * MimicBenchMark.deep2Mimic  avgt  100  19.732 ± 10.214  us/op
- * MimicBenchMark.deep3Mimic  avgt  100  30.132 ±  9.448  us/op
- * MimicBenchMark.lightMimic  avgt  100  30.017 ± 80.168  us/op
- * </p>
+ * Benchmark                  Mode  Cnt   Score   Error  Units
+ * MimicBenchMark.deep2Mimic  avgt   40  11.011 ± 1.420  us/op
+ * MimicBenchMark.deep3Mimic  avgt   40  17.042 ± 2.484  us/op
+ * MimicBenchMark.lightMimic  avgt   40   4.033 ± 0.581  us/op
  *
  * @author Zen.Liu
  * @apiNote
@@ -47,17 +43,17 @@ public class MimicBenchMark {
         if (common)
             opt.mode(Mode.AverageTime)
                 .timeUnit(TimeUnit.MICROSECONDS)
-                .warmupTime(TimeValue.milliseconds(20))
+                .warmupTime(TimeValue.milliseconds(30))
                 .warmupIterations(warmUpIterations)
                 .warmupBatchSize(warmUpBatchSize)
-                .measurementTime(TimeValue.milliseconds(10))
+                .measurementTime(TimeValue.milliseconds(30))
                 .measurementIterations(measurementIterations)
                 .threads(5)
-                .forks(5)
+                .forks(2)
                 .shouldFailOnError(true)
                 .shouldDoGC(true)
                 //.jvmArgs("-XX:+UnlockDiagnosticVMOptions", "-XX:+PrintInlining")
-                //.addProfiler(WinPerfAsmProfiler.class)
+                // .addProfiler(WinPerfAsmProfiler.class)
                 //endregion
                 ;
         new Runner(opt.build()).run();

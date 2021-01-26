@@ -16,10 +16,9 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
-import java.util.stream.Collectors;
 
 import static mimic.ReflectUtil.accessible;
-import static mimic.ReflectUtil.getterMethods;
+import static mimic.ReflectUtil.getterMethodsMapping;
 import static org.jooq.lambda.tuple.Tuple.tuple;
 
 /**
@@ -106,10 +105,11 @@ public final class Proxy<T> implements InvocationHandler, Delegator<T> {
         if (copier.containsKey(face)) {
             return copier.get(face).apply(instance);
         }
-        final List<Tuple2<String, Function<Object, Object>>> m = getterMethods(face).map(x ->
-            x.getName().startsWith("is") ? tuple(x.getName().substring(2), Sneaky.function(x::invoke)) :
-                x.getName().startsWith("get") ? tuple(x.getName().substring(3), Sneaky.function(x::invoke)) : null
-        ).filter(Objects::nonNull).collect(Collectors.toList());
+        final List<Tuple2<String, Function<Object, Object>>> m = getterMethodsMapping(face, x ->
+                x.getName().startsWith("is") ? tuple(x.getName().substring(2), Sneaky.function(x::invoke)) :
+                    x.getName().startsWith("get") ? tuple(x.getName().substring(3), Sneaky.function(x::invoke)) : null,
+            true
+        );
         Function<Object, Map<String, Object>> extractor = o -> {
             final Map<String, Object> values = new HashMap<>();
             for (Tuple2<String, Function<Object, Object>> func : m) {

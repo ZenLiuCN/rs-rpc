@@ -1,7 +1,6 @@
 package mimic;
 
-import org.jooq.lambda.Seq;
-
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -45,7 +44,7 @@ public interface MimicType {
     /**
      * all types
      */
-    List<MimicType> mimicTypes = Seq.<MimicType>of(
+    List<MimicType> mimicTypes = Arrays.asList(
         DefaultMimicType.VALUE
         , DefaultMimicType.OPTIONAL
         , DefaultMimicType.LIST
@@ -53,5 +52,5 @@ public interface MimicType {
         , DefaultMimicType.ENTRY
         , DefaultMimicType.TUPLE
         , DefaultMimicType.ARRAY
-    ).toList();
+    );
 }

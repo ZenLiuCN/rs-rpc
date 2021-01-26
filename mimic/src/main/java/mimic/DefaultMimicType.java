@@ -1,16 +1,14 @@
 package mimic;
 
-import org.jooq.lambda.Seq;
 import org.jooq.lambda.tuple.Tuple;
-import org.jooq.lambda.tuple.Tuple2;
 
 import java.util.*;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
+import static mimic.Lambda.*;
 import static mimic.MimicUtil.findInterface;
 import static mimic.internal.isCommonInterface;
-import static org.jooq.lambda.tuple.Tuple.tuple;
 
 /**
  * @author Zen.Liu
@@ -24,8 +22,8 @@ enum DefaultMimicType implements MimicType {
     MAP(
         x -> x instanceof Map
         , Map.class::isAssignableFrom
-        , x -> x == null ? Collections.emptyMap() : Seq.seq((Map<Object, Object>) x).map(e -> e.map1(MimicUtil::autoMimic).map2(MimicUtil::autoMimic)).toMap(Tuple2::v1, Tuple2::v2)
-        , x -> x == null ? Collections.emptyMap() : Seq.seq((Map<Object, Object>) x).map(e -> e.map1(MimicUtil::autoDisguise).map2(MimicUtil::autoDisguise)).toMap(Tuple2::v1, Tuple2::v2)
+        , x -> x == null ? Collections.emptyMap() : fasterMap((Map<?, ?>) x, MimicUtil::autoMimic)
+        , x -> x == null ? Collections.emptyMap() : fasterMap((Map<?, ?>) x, MimicUtil::autoDisguise)
     ),
     ENTRY(
         x -> x instanceof Map.Entry
@@ -42,20 +40,20 @@ enum DefaultMimicType implements MimicType {
     LIST(
         x -> x instanceof List
         , List.class::isAssignableFrom
-        , x -> x == null ? Collections.emptyList() : Seq.seq((List<Object>) x).map(MimicUtil::autoMimic).toList()
-        , x -> x == null ? Collections.emptyList() : Seq.seq((List<Object>) x).map(MimicUtil::autoDisguise).toList()
+        , x -> x == null ? Collections.emptyList() : fasterList((List<?>) x, MimicUtil::autoMimic)
+        , x -> x == null ? Collections.emptyList() : fasterList((List<?>) x, MimicUtil::autoDisguise)
     ),
     TUPLE(
         x -> x instanceof Tuple
         , Tuple.class::isAssignableFrom
-        , x -> x == null ? null : tuple(Seq.of(((Tuple) x).toArray()).map(MimicUtil::autoMimic).toArray()),
-        x -> x == null ? null : tuple(Seq.of(((Tuple) x).toArray()).map(MimicUtil::autoDisguise).toArray())
+        , x -> x == null ? null : fasterTuple((Tuple) x, MimicUtil::autoMimic),
+        x -> x == null ? null : fasterTuple((Tuple) x, MimicUtil::autoDisguise)
     ),
     ARRAY(
         x -> x.getClass().isArray()
         , Class::isArray
-        , x -> x == null ? null : Seq.of(((Tuple) x).toArray()).map(MimicUtil::autoMimic).toArray()
-        , x -> x == null ? null : Seq.of(((Tuple) x).toArray()).map(MimicUtil::autoDisguise).toArray()
+        , x -> x == null ? null : fasterArray((Object[]) x, MimicUtil::autoMimic)
+        , x -> x == null ? null : fasterArray((Object[]) x, MimicUtil::autoDisguise)
     ),
     VALUE(
         x -> findInterface(x.getClass()) != null

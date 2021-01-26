@@ -2,7 +2,6 @@ package mimic;
 
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.Nullable;
-import org.jooq.lambda.Seq;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.reflect.Constructor;
@@ -12,6 +11,7 @@ import java.util.HashMap;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 
+import static mimic.Lambda.findFirst;
 import static mimic.MimicType.mimicTypes;
 import static mimic.ReflectUtil.CommonMethodName;
 import static mimic.ReflectUtil.accessible;
@@ -127,8 +127,7 @@ public class Mimic<T> implements InvocationHandler, Delegator<T> {
             values.put(field, deep.get(field).mimic(value));
             return;
         }
-        final MimicType mimicType = Seq.seq(mimicTypes)
-            .findFirst(x -> x.match(value) || x.match(value.getClass())).orElse(null);
+        final MimicType mimicType = findFirst(mimicTypes, x -> x.match(value) || x.match(value.getClass()));
         final Object mimic = MimicUtil.autoMimic(value);
         values.put(field, mimic);
         if (mimicType != null) {

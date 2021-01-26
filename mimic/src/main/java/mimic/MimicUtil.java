@@ -2,7 +2,6 @@ package mimic;
 
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import org.jooq.lambda.Seq;
 import org.jooq.lambda.tuple.Tuple2;
 
 import java.lang.reflect.Method;
@@ -12,8 +11,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Predicate;
-import java.util.stream.Collectors;
 
+import static mimic.Lambda.findFirstReverse;
 import static mimic.MimicType.mimicTypes;
 import static mimic.ReflectUtil.*;
 import static mimic.internal.*;
@@ -59,7 +58,7 @@ public interface MimicUtil {
         if (delegator.containsKey(type)) {
             return (Mimic<T>) delegator.get(type).apply(instance);
         }
-        final List<Method> methods = getterMethods(type).toList();
+        final List<Method> methods = getterMethods(type);
         Function<Object, Mimic<?>> delegateBuilder = x -> {
             final ConcurrentHashMap<String, Object> values = new ConcurrentHashMap<>();
             final HashMap<String, MimicType> typeMap = new HashMap<>();
@@ -71,10 +70,7 @@ public interface MimicUtil {
                     values.put(field, NULL.Null);
                     continue;
                 }
-                final MimicType mimicType = Seq.seq(mimicTypes).reverse()
-                    .findFirst(t ->
-                        t.match(rType) || t.match(value)
-                    ).orElse(null);
+                final MimicType mimicType = findFirstReverse(mimicTypes, t -> t.match(rType) || t.match(value));
                 if (mimicType != null) {
                     values.put(field, mimicType.mimic(value));
                     typeMap.put(field, mimicType);
@@ -102,9 +98,9 @@ public interface MimicUtil {
             || !interfaceNamePredicate.get().test(interfaces[0].getName())) {
             return null;
         } else {//check if a full instance
-            final List<String> lists = getterMethods(clazz).map(Method::getName).collect(Collectors.toList());
-            final long cnt = getterMethods(interfaces[0]).filter(x -> !lists.contains(x.getName())).count();
-            if (cnt > 0) {
+            final List<String> lists = getterMethodsMapping(clazz, Method::getName, false);
+            final List<String> list = getterMethodsMapping(interfaces[0], Method::getName, false);
+            if (!list.containsAll(lists)) {
                 reflectInterfaceCache.put(clazz, null);
                 return null;
             } else {
@@ -157,4 +153,6 @@ public interface MimicUtil {
         if (o == null) return instance;
         return o;
     }
+
+
 }
