@@ -60,7 +60,7 @@ public interface Proto {
             ProtostuffIOUtil.mergeFrom(data, o, schema);
         }
         if (o instanceof Delegator) {
-            return (T) ((Delegator) o).delegate();
+            return (T) ((Delegator) o).disguise();
         }
         return (T) o;
     }

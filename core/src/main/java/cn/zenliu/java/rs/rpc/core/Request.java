@@ -37,7 +37,7 @@ class Request {
         if (arguments == null || arguments.length == 0) return arguments;
         return Seq.of(arguments).map(x ->
             x instanceof NULL ? null :
-                Rpc.autoDelegate.get() ? MimicUtil.autoDelegate(x) : x
+                Rpc.autoDelegate.get() ? MimicUtil.autoDisguise(x) : x
         ).toArray();
     }
 

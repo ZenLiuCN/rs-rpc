@@ -29,7 +29,7 @@ final class Response {
     final Result<Object> response;
 
     public Result<Object> getResponse() {
-        return Rpc.autoDelegate.get() ? response.map(MimicUtil::autoDelegate) : response;
+        return Rpc.autoDelegate.get() ? response.map(MimicUtil::autoDisguise) : response;
     }
 
     public static Payload build(Meta meta, String name, Result<Object> result) {

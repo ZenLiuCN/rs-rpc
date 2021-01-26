@@ -1,5 +1,6 @@
 package cn.zenliu.java.rs.rpc.core;
 
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -13,7 +14,7 @@ import static cn.zenliu.java.rs.rpc.core.ScopeContextImpl.ROUTE_MARK;
  * @apiNote
  * @since 2021-01-23
  */
-final class UniqueList {
+public final class UniqueList {
     final List<String> value;
 
     UniqueList(List<String> value) {
@@ -79,5 +80,9 @@ final class UniqueList {
     @Override
     public String toString() {
         return value.toString();
+    }
+
+    public List<String> getValue() {
+        return Collections.unmodifiableList(value);
     }
 }

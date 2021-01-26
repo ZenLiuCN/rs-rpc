@@ -2,6 +2,7 @@ package mimic;
 
 import lombok.SneakyThrows;
 import lombok.ToString;
+import org.jetbrains.annotations.Nullable;
 import org.jooq.lambda.Sneaky;
 import org.jooq.lambda.tuple.Tuple2;
 
@@ -17,7 +18,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import static mimic.Mimic.accessible;
+import static mimic.ReflectUtil.accessible;
 import static mimic.ReflectUtil.getterMethods;
 import static org.jooq.lambda.tuple.Tuple.tuple;
 
@@ -71,7 +72,7 @@ public final class Proxy<T> implements InvocationHandler, Delegator<T> {
      */
 
     public static <T> T of(Class<T> clz, Map<String, Object> init) {
-        return new Proxy<>(clz, init).delegate();
+        return new Proxy<>(clz, init).disguise();
     }
 
     /**
@@ -84,6 +85,14 @@ public final class Proxy<T> implements InvocationHandler, Delegator<T> {
      */
     public static <T> T of(Class<T> clz, T instance) {
         return new Proxy<>(clz, copy(instance, clz)).getResult();
+    }
+
+    public static <T> Proxy<T> from(Class<T> clz, T instance) {
+        return new Proxy<>(clz, copy(instance, clz));
+    }
+
+    public static <T> Proxy<T> from(Class<T> clz) {
+        return new Proxy<>(clz, null);
     }
 
     /**
@@ -125,7 +134,7 @@ public final class Proxy<T> implements InvocationHandler, Delegator<T> {
      * Create a Proxy from current Instance
      */
     @SneakyThrows
-    public T delegate() {
+    public T disguise() {
         return getResult();
     }
 
@@ -134,13 +143,17 @@ public final class Proxy<T> implements InvocationHandler, Delegator<T> {
         String name = method.getName();
         int length = (args == null ? 0 : args.length);
         if (length == 0 && name.startsWith("is")) {
-            return values.get(name.substring(2));
+            return NULL.restore(values.get(name.substring(2)));
         } else if (length == 0 && name.startsWith("get")) {
-            return values.get(name.substring(3));
+            return NULL.restore(values.get(name.substring(3)));
         } else if (length == 1 && name.startsWith("set")) {
-            return values.put(name.substring(3), args);
+            return values.put(name.substring(3), NULL.wrap(args[0]));
         } else if (length == 0 && name.equals("toString")) {
-            return type + values.toString();
+            return type + "$Proxy" + values.toString();
+        } else if (length == 1 && name.equals("equals")) {
+            return args[0].equals(values);
+        } else if (length == 0 && name.equals("hashCode")) {
+            return values.hashCode();
         } else if (method.isDefault()) {
             getResult();
             try {
@@ -158,6 +171,25 @@ public final class Proxy<T> implements InvocationHandler, Delegator<T> {
         } else {
             throw new IllegalStateException("not accepted call:" + name);
         }
+    }
+
+    @Override
+    public Proxy<T> set(String field, Object value) {
+        if (field == null || field.isEmpty()) throw new IllegalArgumentException("field should never be null or empty");
+        if (!Character.isUpperCase(field.charAt(0)))
+            throw new IllegalArgumentException("field should be Pascal Case (first char also upper cased)");
+        values.put(field, NULL.wrap(value));
+        return this;
+    }
+
+    @Override
+    public @Nullable Object get(String field) {
+        return NULL.restore(values.get(field));
+    }
+
+    @Override
+    public String dump() {
+        return type + "$Proxy" + values;
     }
 }
 

@@ -11,7 +11,13 @@ import java.util.Optional;
  * @since 2021-01-24
  */
 public interface Delegator<T> {
-    T delegate();
+    T disguise();
+
+    Object get(String field);
+
+    Delegator<T> set(String field, Object value);
+
+    String dump();
 
     static @Nullable Object tryRemoveProxy(Object maybeProxy) {
         try {

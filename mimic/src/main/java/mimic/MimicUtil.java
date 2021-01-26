@@ -1,19 +1,22 @@
 package mimic;
 
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.jooq.lambda.Seq;
-import org.jooq.lambda.tuple.*;
+import org.jooq.lambda.tuple.Tuple2;
 
 import java.lang.reflect.Method;
-import java.util.*;
-import java.util.Map.Entry;
+import java.util.HashMap;
+import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
+import static mimic.MimicType.mimicTypes;
 import static mimic.ReflectUtil.*;
-import static org.jooq.lambda.tuple.Tuple.tuple;
+import static mimic.internal.*;
 
 /**
  * @author Zen.Liu
@@ -21,8 +24,9 @@ import static org.jooq.lambda.tuple.Tuple.tuple;
  * @since 2021-01-24
  */
 public interface MimicUtil {
-
-    AtomicReference<Predicate<String>> interfaceNamePredicate = new AtomicReference<>(x -> true);
+    static void setInterfacePredicate(@Nullable Predicate<String> interfacePredicate) {
+        interfaceNamePredicate.set(interfacePredicate == null ? x -> true : interfacePredicate);
+    }
 
     /**
      * process common container
@@ -31,10 +35,10 @@ public interface MimicUtil {
      * @param processor the processor
      * @return null or processor result
      */
-    @SuppressWarnings({"unchecked", "rawtypes"})
-    static Object containerProcess(Object instance, Function<Object, Object> processor) {
-        if (instance == null) return null;
-        if (instance instanceof Optional) {
+    static Object containerProcess(Object instance, boolean realNull, Function<Object, Object> processor) {
+        if (instance == null) return realNull ? null : NULL.Null;
+        if (instance instanceof NULL) return realNull ? null : NULL.Null;
+   /*     if (instance instanceof Optional) {
             Optional<Object> a = (Optional<Object>) instance;
             if (!a.isPresent()) return instance;
             return a.map(processor);
@@ -203,22 +207,31 @@ public interface MimicUtil {
                 .map14(processor)
                 .map15(processor)
                 .map16(processor);
-            else return instance;
+            else return instance; }*/
+        for (Tuple2<Predicate<Object>, BiFunction<Function<Object, Object>, Object, Object>> p : containerProcessors) {
+            if (p.v1.test(instance)) return p.v2.apply(processor, instance);
         }
         return instance;
     }
 
-    Map<Class<?>, Function<Object, Mimic<?>>> delegator = new ConcurrentHashMap<>();
-
+    /**
+     * convert a Instance into a {@link Mimic} as Type
+     *
+     * @param instance the instance (not null)
+     * @param type     the target type
+     * @param <T>      type
+     * @return a Mimic
+     */
     @SuppressWarnings("unchecked")
-    static <T> Mimic<T> mimic(Object instance, Class<T> type) {
+    static <T> Mimic<T> mimic(@NotNull Object instance, @NotNull Class<T> type) {
+        //use cache if possible
         if (delegator.containsKey(type)) {
             return (Mimic<T>) delegator.get(type).apply(instance);
         }
         final List<Method> methods = getterMethods(type).toList();
         Function<Object, Mimic<?>> delegateBuilder = x -> {
             final ConcurrentHashMap<String, Object> values = new ConcurrentHashMap<>();
-            final HashMap<String, DeepType> typeMap = new HashMap<>();
+            final HashMap<String, MimicType> typeMap = new HashMap<>();
             for (Method method : methods) {
                 final String field = getterNameToFieldName(method.getName());
                 final Object value = sneakyInvoker(x, method);
@@ -227,76 +240,21 @@ public interface MimicUtil {
                     values.put(field, NULL.Null);
                     continue;
                 }
-                if (value instanceof Tuple) {
-                    values.put(field, DeepType.TUPLE.mimic.apply(value));
-                    typeMap.put(field, DeepType.TUPLE);
+                final MimicType mimicType = Seq.seq(mimicTypes).reverse()
+                    .findFirst(t ->
+                        t.match(rType) || t.match(value)
+                    ).orElse(null);
+                if (mimicType != null) {
+                    values.put(field, mimicType.mimic(value));
+                    typeMap.put(field, mimicType);
                     continue;
                 }
-                if (value instanceof Optional) {
-                    values.put(field, DeepType.OPTIONAL.mimic.apply(value));
-                    typeMap.put(field, DeepType.OPTIONAL);
-                    continue;
-                }
-                if (value instanceof Map) {
-                    values.put(field, DeepType.MAP.mimic.apply(value));
-                    typeMap.put(field, DeepType.MAP);
-                    continue;
-                }
-                if (value instanceof Entry) {
-                    values.put(field, DeepType.ENTRY.mimic.apply(value));
-                    typeMap.put(field, DeepType.ENTRY);
-                    continue;
-                }
-                if (value instanceof List) {
-                    values.put(field, DeepType.LIST.mimic.apply(value));
-                    typeMap.put(field, DeepType.LIST);
-                    continue;
-                }
-                if (!rType.isInterface()) {
-                    values.put(field, value);//normal value
-                    //typeMap.put(field, DeepType.UNK);
-                } else {
-                    values.put(field, DeepType.VALUE.mimic.apply(value));
-                    typeMap.put(field, DeepType.VALUE);
-                }
+                values.put(field, value);
             }
             return new Mimic<>(type, values, typeMap);
         };
         delegator.put(type, delegateBuilder);
         return (Mimic<T>) delegateBuilder.apply(instance);
-    }
-
-    @SuppressWarnings("unchecked")
-    enum DeepType {
-        UNK(x -> x, x -> x),
-        MAP(
-            x -> x == null ? Collections.emptyMap() : Seq.seq((Map<Object, Object>) x).map(e -> e.map1(MimicUtil::autoMimic).map2(MimicUtil::autoMimic)).toMap(Tuple2::v1, Tuple2::v2),
-            x -> x == null ? Collections.emptyMap() : Seq.seq((Map<Object, Object>) x).map(e -> e.map1(MimicUtil::autoDelegate).map2(MimicUtil::autoDelegate)).toMap(Tuple2::v1, Tuple2::v2)
-        ),
-        ENTRY(
-            x -> x == null ? null : new AbstractMap.SimpleEntry<>(MimicUtil.autoMimic(((Entry<Object, Object>) x).getKey()), MimicUtil.autoMimic(((Entry<Object, Object>) x).getValue())),
-            x -> x == null ? null : new AbstractMap.SimpleEntry<>(MimicUtil.autoDelegate(((Entry<Object, Object>) x).getKey()), MimicUtil.autoDelegate(((Entry<Object, Object>) x).getValue()))
-        ),
-        OPTIONAL(
-            x -> x == null ? Optional.empty() : ((Optional<Object>) x).map(MimicUtil::autoMimic),
-            x -> x == null ? Optional.empty() : ((Optional<Object>) x).map(MimicUtil::autoDelegate)
-        ),
-        LIST(
-            x -> x == null ? Collections.emptyList() : Seq.seq((List<Object>) x).map(MimicUtil::autoMimic).toList(),
-            x -> x == null ? Collections.emptyList() : Seq.seq((List<Object>) x).map(MimicUtil::autoDelegate).toList()
-        ),
-        TUPLE(
-            x -> x == null ? null : tuple(Seq.of(((Tuple) x).toArray()).map(MimicUtil::autoMimic).toArray()),
-            x -> x == null ? null : tuple(Seq.of(((Tuple) x).toArray()).map(MimicUtil::autoDelegate).toArray())
-        ),
-        VALUE(MimicUtil::autoMimic, MimicUtil::autoDelegate);
-        public final Function<Object, Object> mimic;
-        public final Function<Object, Object> delegate;
-
-        DeepType(Function<Object, Object> mimic, Function<Object, Object> delegate) {
-            this.mimic = mimic;
-            this.delegate = delegate;
-        }
     }
 
     /**
@@ -309,12 +267,7 @@ public interface MimicUtil {
         if (reflectInterfaceCache.containsKey(clazz)) return reflectInterfaceCache.get(clazz);
         final Class<?>[] interfaces = clazz.getInterfaces();
         if (interfaces == null || interfaces.length == 0
-            || interfaces[0].getName().startsWith("java.")
-            || interfaces[0].getName().startsWith("com.sun")
-            || interfaces[0].getName().startsWith("sun.")
-            || interfaces[0].getName().startsWith("com.oracle")
-            || interfaces[0].getName().startsWith("jdk.")
-            || interfaces[0].getName().startsWith("javax.")
+            || isCommonInterface(interfaces[0])
             || !interfaceNamePredicate.get().test(interfaces[0].getName())) {
             return null;
         } else {//check if a full instance
@@ -330,13 +283,24 @@ public interface MimicUtil {
         }
     }
 
-
+    /**
+     * convert a instance into Maybe Mimic.<br>
+     * a {@link Mimic} will keep remains.<br>
+     * a null will transform into a {@link NULL}.<br>
+     * a {@link Proxy} will be treated as who him play as.<br>
+     *
+     * @param instance original instance
+     * @return Maybe a Mimic
+     */
     static Object autoMimic(Object instance) {
-        if (instance == null) return null;
+        if (instance == null) return NULL.Null;
+        if (instance instanceof Mimic) return instance;
+        final Object proxy = Delegator.tryRemoveProxy(instance);
+        if (proxy instanceof Mimic) return proxy;
         final Class<?> aClass = instance.getClass();
-        if (aClass.isPrimitive() || aClass.isEnum() || aClass.isArray()) return instance;
+        if (aClass.isPrimitive() || aClass.isEnum()) return instance;
         else {
-            final Object result = containerProcess(instance, MimicUtil::autoMimic);
+            final Object result = containerProcess(instance, false, MimicUtil::autoMimic);
             if (result != instance) return result;
         }
         final Class<?> anInterface = findInterface(aClass);
@@ -344,13 +308,21 @@ public interface MimicUtil {
         return mimic(instance, anInterface);
     }
 
-
-    static Object autoDelegate(Object instance) {
-        if (instance == null) return null;
+    /**
+     * restore a Maybe Mimic to original form.<br>
+     * a {@link Mimic} will keep remains.<br>
+     * a null will transform into a {@link NULL}.<br>
+     * a {@link Proxy} will be treated as who him play as.<br>
+     *
+     * @param instance the instance Maybe Mimic
+     * @return original form of instance
+     */
+    static Object autoDisguise(Object instance) {
+        if (instance instanceof NULL) return null;
         if (instance instanceof Delegator) {
-            return ((Mimic<?>) instance).delegate();
+            return ((Mimic<?>) instance).disguise();
         }
-        final Object o = containerProcess(instance, MimicUtil::autoDelegate);
+        final Object o = containerProcess(instance, true, MimicUtil::autoDisguise);
         if (o == null) return instance;
         return o;
     }

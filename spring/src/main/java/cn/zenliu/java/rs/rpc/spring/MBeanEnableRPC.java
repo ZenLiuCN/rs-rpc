@@ -80,14 +80,14 @@ public @interface MBeanEnableRPC {
         @ManagedOperationParameter(name = "name", description = "scope简化名称")
         public List<String> localServiceName(@NotNull String name) {
             final ScopeImpl bean = getBean(name);
-            return bean.getServices();
+            return bean.getServices().getValue();
         }
 
         @ManagedOperation(description = "查看远程服务")
         @ManagedOperationParameter(name = "name", description = "scope简化名称")
         public Map<String, Map<String, ?>> remotesRegistry(@NotNull String name) {
             final ScopeImpl bean = getBean(name);
-            return Seq.seq(bean.getRemoteNames()).zipWithIndex()
+            return Seq.seq(bean.getRemoteNames().getValue()).zipWithIndex()
                 .map(t -> t.map2(i -> bean.getRemotes().get(i.intValue())))
                 .map(t -> t.map2(Remote::dumpRemote))
                 .toMap(Tuple2::v1, Tuple2::v2);
@@ -98,7 +98,7 @@ public @interface MBeanEnableRPC {
         public Map<String, List<Map<String, Object>>> remotes(@NotNull String name) {
             final ScopeImpl bean = getBean(name);
             return Seq.seq(bean.getRemoteServices())
-                .map(t -> t.map1(i -> bean.getRemoteDomains().get(i)).map2(x -> Seq.seq(x).map(Remote::dumpRemote).toList()))
+                .map(t -> t.map1(i -> bean.getDomains().getValue().get(i)).map2(x -> Seq.seq(x).map(Remote::dumpRemote).toList()))
                 .toMap(Tuple2::v1, Tuple2::v2);
         }
 

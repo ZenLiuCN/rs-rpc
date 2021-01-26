@@ -1,17 +1,19 @@
 package mimic;
 
 import lombok.extern.slf4j.Slf4j;
-import org.jooq.lambda.tuple.Tuple;
+import org.jetbrains.annotations.Nullable;
+import org.jooq.lambda.Seq;
 
 import java.lang.invoke.MethodHandles;
-import java.lang.reflect.*;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.Method;
 import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
+import static mimic.MimicType.mimicTypes;
 import static mimic.ReflectUtil.CommonMethodName;
+import static mimic.ReflectUtil.accessible;
 
 /**
  * Mimic is a Nest Deep Delegator with only getters supported<br>
@@ -28,7 +30,7 @@ import static mimic.ReflectUtil.CommonMethodName;
 public class Mimic<T> implements InvocationHandler, Delegator<T> {
     private final Class<T> type;
     private final ConcurrentHashMap<String, Object> values;
-    private final HashMap<String, MimicUtil.DeepType> deep;
+    private final HashMap<String, MimicType> deep;
 
 
     private Constructor<MethodHandles.Lookup> constructor;
@@ -42,21 +44,6 @@ public class Mimic<T> implements InvocationHandler, Delegator<T> {
         return result;
     }
 
-    static <T extends AccessibleObject> T accessible(T accessible) {
-        if (accessible == null) {
-            return null;
-        }
-        if (accessible instanceof Member) {
-            Member member = (Member) accessible;
-            if (Modifier.isPublic(member.getModifiers()) &&
-                Modifier.isPublic(member.getDeclaringClass().getModifiers())) {
-                return accessible;
-            }
-        }
-        if (!accessible.isAccessible())
-            accessible.setAccessible(true);
-        return accessible;
-    }
 
     @Override
     public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
@@ -68,14 +55,14 @@ public class Mimic<T> implements InvocationHandler, Delegator<T> {
             final String field = name.substring(3);
             final Object v = NULL.restore(values.get(field));
             if (deep.containsKey(field)) {
-                return deep.get(field).delegate.apply(v);
+                return deep.get(field).delegate(v);
             } else {
                 return NULL.restore(v);
             }
         } else if (length == 0 && !CommonMethodName.contains(name)) {
             final Object v = NULL.restore(values.get(name));
             if (deep.containsKey(name)) {
-                return deep.get(name).delegate.apply(v);
+                return deep.get(name).delegate(v);
             } else {
                 return NULL.restore(v);
             }
@@ -89,7 +76,7 @@ public class Mimic<T> implements InvocationHandler, Delegator<T> {
             setValue(name, v);
             return null;
         } else if (length == 0 && name.equals("toString")) {
-            return type + values.toString();
+            return type + "$Mimic" + values.toString();
         } else if (method.isDefault()) {
             getResult();
             try {
@@ -114,26 +101,20 @@ public class Mimic<T> implements InvocationHandler, Delegator<T> {
             values.put(field, NULL.Null);
             return;
         }
+        if (deep.containsKey(field)) {
+            values.put(field, deep.get(field).mimic(value));
+            return;
+        }
+        final MimicType mimicType = Seq.seq(mimicTypes)
+            .findFirst(x -> x.match(value) || x.match(value.getClass())).orElse(null);
         final Object mimic = MimicUtil.autoMimic(value);
         values.put(field, mimic);
-        if (mimic instanceof Mimic) {
-            if (value instanceof List) {
-                deep.put(field, MimicUtil.DeepType.LIST);
-            } else if (value instanceof Map.Entry) {
-                deep.put(field, MimicUtil.DeepType.ENTRY);
-            } else if (value instanceof Tuple) {
-                deep.put(field, MimicUtil.DeepType.TUPLE);
-            } else if (value instanceof Optional) {
-                deep.put(field, MimicUtil.DeepType.OPTIONAL);
-            } else if (value instanceof Map) {
-                deep.put(field, MimicUtil.DeepType.MAP);
-            } else {
-                deep.put(field, MimicUtil.DeepType.VALUE);
-            }
+        if (mimicType != null) {
+            deep.put(field, mimicType);
         }
     }
 
-    Mimic(Class<T> type, ConcurrentHashMap<String, Object> values, HashMap<String, MimicUtil.DeepType> deep) {
+    Mimic(Class<T> type, ConcurrentHashMap<String, Object> values, HashMap<String, MimicType> deep) {
         this.type = type;
         this.values = values;
         this.deep = deep;
@@ -148,9 +129,27 @@ public class Mimic<T> implements InvocationHandler, Delegator<T> {
      * create proxy instance from mimic
      */
     @Override
-    public T delegate() {
+    public T disguise() {
         return type.cast(getResult()[0]);
     }
 
 
+    @Override
+    public Mimic<T> set(String field, Object value) {
+        if (field == null || field.isEmpty()) throw new IllegalArgumentException("field should never be null or empty");
+        if (!Character.isUpperCase(field.charAt(0)))
+            throw new IllegalArgumentException("field should be Pascal Case (first char also upper cased)");
+        setValue(field, value);
+        return this;
+    }
+
+    @Override
+    public @Nullable Object get(String field) {
+        return NULL.restore(values.get(field));
+    }
+
+    @Override
+    public String dump() {
+        return type + "$Mimic" + values + ":Ref" + deep;
+    }
 }

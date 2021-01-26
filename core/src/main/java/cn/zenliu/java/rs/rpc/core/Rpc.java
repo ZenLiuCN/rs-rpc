@@ -1,5 +1,6 @@
 package cn.zenliu.java.rs.rpc.core;
 
+import cn.zenliu.java.mimic.api.MimicApi;
 import cn.zenliu.java.rs.rpc.api.JvmUnique;
 import cn.zenliu.java.rs.rpc.api.Scope;
 import mimic.MimicUtil;
@@ -41,7 +42,7 @@ public interface Rpc {
      * @param predicate the method
      */
     static void setMimicInterfaces(Predicate<String> predicate) {
-        MimicUtil.interfaceNamePredicate.set(predicate == null ? x -> true : predicate);
+        MimicApi.setInterfacePredicate(predicate == null ? x -> true : predicate);
     }
 
     /**
@@ -134,6 +135,6 @@ public interface Rpc {
      * @return Proxy with data from Instance
      */
     static <T> T delegateDeep(T instance, Class<T> interfaceType) {
-        return (T) MimicUtil.mimic(instance, interfaceType).delegate();
+        return (T) MimicUtil.mimic(instance, interfaceType).disguise();
     }
 }

@@ -13,12 +13,9 @@
 
     <dependencies>
         <dependency>
-            <groupId>org.jooq</groupId>
-            <artifactId>jool-java-8</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.slf4j</groupId>
-            <artifactId>slf4j-api</artifactId>
+            <groupId>cn.zenliu.java</groupId>
+            <artifactId>mimic</artifactId>
+            <version>${project.version}</version>
         </dependency>
     </dependencies>
 </project>

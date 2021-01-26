@@ -106,7 +106,7 @@ public class DelegatorTest {
         System.out.println(from1);
         final Mimic<Dictionary> mm = MimicUtil.mimic(d2, Dictionary.class);
         System.out.println(mm);
-        final byte[] bytes = Proto.to(mm.delegate());
+        final byte[] bytes = Proto.to(mm.disguise());
         System.out.println(ByteBufUtil.prettyHexDump(Unpooled.copiedBuffer(bytes)));
         System.out.println(Base64.getEncoder().encodeToString(bytes));
         final Dictionary from = Proto.from(bytes, Dictionary.class);
