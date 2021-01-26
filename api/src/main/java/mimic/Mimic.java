@@ -64,7 +64,7 @@ public class Mimic<T> implements InvocationHandler, Delegator<T> {
         int length = (args == null ? 0 : args.length);
         if (length == 0 && name.startsWith("is")) {
             return NULL.restore(values.get(name.substring(2)));
-        } else if (length == 0 && name.startsWith("get") && !name.endsWith("Class")) {
+        } else if (length == 0 && name.startsWith("get") && !CommonMethodName.contains(name)) {
             final String field = name.substring(3);
             final Object v = NULL.restore(values.get(field));
             if (deep.containsKey(field)) {
@@ -79,7 +79,7 @@ public class Mimic<T> implements InvocationHandler, Delegator<T> {
             } else {
                 return NULL.restore(v);
             }
-        } else if (length == 1 && name.startsWith("set")) {
+        } else if (length == 1 && name.startsWith("set") && !CommonMethodName.contains(name)) {
             String field = name.substring(3);
             final Object v = args[0];
             setValue(field, v);
