@@ -25,15 +25,16 @@ public interface MimicApi {
     /**
      * use fluent getter mode to mimic a interface: which means not choose Getter Setter for just match JavaBean protocol
      */
-    static void useFluentGetterMode() {
-        ReflectUtil.setGetterPredicate(ReflectUtil::fluentBeanGetterPredicate);
+    static void useFluentMode() {
+        ReflectUtil.useFluentMode();
+
     }
 
     /**
      * use JavaBean protocol for Getter Setter match
      */
-    static void useJavaBeanGetterMode() {
-        ReflectUtil.setGetterPredicate(ReflectUtil::javaBeanGetterPredicate);
+    static void useJavaBeanMode() {
+        ReflectUtil.useJavaBeanMode();
     }
 
     /**

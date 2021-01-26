@@ -135,7 +135,21 @@ public interface ReflectUtil {
         return accessible;
     }
 
-    static void setGetterPredicate(Predicate<Method> predicate) {
-        getterPredicate.set(predicate);
+
+    /**
+     * use fluent getter mode to mimic a interface: which means not choose Getter Setter for just match JavaBean protocol
+     */
+    static void useFluentMode() {
+        internal.getterPredicate.set(ReflectUtil::fluentBeanGetterPredicate);
+        fluent.set(true);
     }
+
+    /**
+     * use JavaBean protocol for Getter Setter match
+     */
+    static void useJavaBeanMode() {
+        internal.getterPredicate.set(ReflectUtil::javaBeanGetterPredicate);
+        fluent.set(false);
+    }
+
 }
