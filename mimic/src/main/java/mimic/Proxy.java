@@ -1,15 +1,9 @@
 package mimic;
 
-import lombok.SneakyThrows;
-import lombok.ToString;
 import org.jetbrains.annotations.Nullable;
 import org.jooq.lambda.Sneaky;
 import org.jooq.lambda.tuple.Tuple2;
 
-import java.lang.invoke.MethodHandles;
-import java.lang.reflect.Constructor;
-import java.lang.reflect.InvocationHandler;
-import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -17,7 +11,6 @@ import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 
-import static mimic.ReflectUtil.accessible;
 import static mimic.ReflectUtil.getterMethodsMapping;
 import static org.jooq.lambda.tuple.Tuple.tuple;
 
@@ -28,38 +21,65 @@ import static org.jooq.lambda.tuple.Tuple.tuple;
  * @apiNote Delegator
  * @since 2021-01-12
  */
-@ToString
-public final class Proxy<T> implements InvocationHandler, Delegator<T> {
+public final class Proxy<T> extends BaseDelegator<T> {
+    Proxy(Class<T> type) {
+        super(type, new ConcurrentHashMap<>());
+    }
+
+    Proxy(Class<T> type, Map<String, Object> values) {
+        super(type, values == null ? new ConcurrentHashMap<>() : new ConcurrentHashMap<>(values));
+    }
+
+    @Override
+    public @Nullable Object get(String field) {
+        return getter(field);
+    }
+
+    public Proxy<T> set(String field, Object value) {
+        validateField(field);
+        setter(field, value);
+        return this;
+    }
+
+    void setter(String field, Object value) {
+        values.put(field, NULL.wrap(value));
+    }
+
+    Object getter(String field) {
+        return NULL.restore(values.get(field));
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof Proxy)) {
+            final Object o1 = Delegator.tryRemoveProxy(o);
+            if (!(o1 instanceof Proxy)) return false;
+            return equals(o1);
+        }
+        Proxy<?> proxy = (Proxy<?>) o;
+        return type.equals(proxy.type) && values.equals(proxy.values);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(type, values);
+    }
+
+    @Override
+    public String dump() {
+        return type + "$Proxy" + values;
+    }
+
+    @Override
+    public String toString() {
+        return dump();
+    }
+//region Static
     /**
      * Copier Cache
      */
     public static final Map<Class<?>, Function<Object, Map<String, Object>>> copier = new ConcurrentHashMap<>();
-    /**
-     * Delegate target type
-     */
-    public final Class<T> type;
-    public final ConcurrentHashMap<String, Object> values;
-    private Constructor<MethodHandles.Lookup> constructor;
-    private transient Object[] result;
-
-    Proxy(Class<T> type) {
-        this.type = type;
-        this.values = new ConcurrentHashMap<>();
-    }
-
-    Proxy(Class<T> type, Map<String, Object> values) {
-        this.type = type;
-        this.values = values == null ? new ConcurrentHashMap<>() : new ConcurrentHashMap<>(values);
-    }
-
-    @SuppressWarnings("unchecked")
-    private T getResult() {
-        if (result == null) {
-            result = new Object[1];
-            result[0] = java.lang.reflect.Proxy.newProxyInstance(type.getClassLoader(), new Class[]{type}, this);
-        }
-        return (T) result[0];
-    }
 
     /**
      * Build a Delegate Proxy via Initial values
@@ -83,7 +103,7 @@ public final class Proxy<T> implements InvocationHandler, Delegator<T> {
      * @return Proxy Instance
      */
     public static <T> T of(Class<T> clz, T instance) {
-        return new Proxy<>(clz, copy(instance, clz)).getResult();
+        return new Proxy<>(clz, copy(instance, clz)).disguise();
     }
 
     public static <T> Proxy<T> from(Class<T> clz, T instance) {
@@ -128,102 +148,10 @@ public final class Proxy<T> implements InvocationHandler, Delegator<T> {
         final Class<?> iface = noneNestedInterfaceObject.getClass().getInterfaces()[0];
         return of((Class<T>) iface, noneNestedInterfaceObject);
     }
+    //endregion
 
-
-    /**
-     * Create a Proxy from current Instance
-     */
-    @SneakyThrows
-    public T disguise() {
-        return getResult();
-    }
-
-    @Override
-    public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
-        String name = method.getName();
-        int length = (args == null ? 0 : args.length);
-        if (length == 0 && name.startsWith("is")) {
-            return NULL.restore(values.get(name.substring(2)));
-        } else if (length == 0 && name.startsWith("get")) {
-            return NULL.restore(values.get(name.substring(3)));
-        } else if (length == 1 && name.startsWith("set")) {
-            return values.put(name.substring(3), NULL.wrap(args[0]));
-        } else if (length == 0 && name.equals("toString")) {
-            return type + "$Proxy" + values.toString();
-        } else if (length == 1 && name.equals("equals")) {
-            return this.equals(args[0]);
-        } else if (length == 0 && name.equals("hashCode")) {
-            return this.hashCode();
-        } else if (length == 0 && name.equals("getClass")) {
-            return type;
-        } else if (length == 0 && name.equals("wait")) {
-            this.wait();
-            return null;
-        } else if (length == 1 && name.equals("wait")) {
-            this.wait((Long) args[0]);
-            return null;
-        } else if (length == 2 && name.equals("wait")) {
-            this.wait((Long) args[0], (Integer) args[1]);
-            return null;
-        } else if (length == 0 && name.equals("notify")) {
-            this.notify();
-            return null;
-        } else if (length == 0 && name.equals("notifyAll")) {
-            this.notifyAll();
-            return null;
-        } else if (method.isDefault()) {
-            getResult();
-            try {
-                if (constructor == null)
-                    constructor = accessible(MethodHandles.Lookup.class.getDeclaredConstructor(Class.class, int.class));
-                Class<?> declaringClass = method.getDeclaringClass();
-                return constructor
-                    .newInstance(declaringClass, MethodHandles.Lookup.PRIVATE)
-                    .unreflectSpecial(method, declaringClass)
-                    .bindTo(result[0])
-                    .invokeWithArguments(args);
-            } catch (Throwable e) {
-                throw new IllegalStateException("Cannot invoke default method", e);
-            }
-        } else {
-            throw new IllegalStateException("not accepted call:" + name);
-        }
-    }
-
-    @Override
-    public Proxy<T> set(String field, Object value) {
-        if (field == null || field.isEmpty()) throw new IllegalArgumentException("field should never be null or empty");
-        if (!Character.isUpperCase(field.charAt(0)))
-            throw new IllegalArgumentException("field should be Pascal Case (first char also upper cased)");
-        values.put(field, NULL.wrap(value));
-        return this;
-    }
-
-    @Override
-    public @Nullable Object get(String field) {
-        return NULL.restore(values.get(field));
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (!(o instanceof Proxy)) {
-            final Object o1 = Delegator.tryRemoveProxy(o);
-            if (!(o1 instanceof Proxy)) return false;
-            return equals(o1);
-        }
-        Proxy<?> proxy = (Proxy<?>) o;
-        return type.equals(proxy.type) && values.equals(proxy.values);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(type, values);
-    }
-
-    @Override
-    public String dump() {
-        return type + "$Proxy" + values;
-    }
 }
+
+
+
 

@@ -39,7 +39,7 @@ public interface MimicType {
      * @param mimic mimic
      * @return original form
      */
-    Object delegate(Object mimic);
+    Object disguise(Object mimic);
 
     /**
      * all types

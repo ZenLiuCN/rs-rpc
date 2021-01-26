@@ -87,7 +87,7 @@ enum DefaultMimicType implements MimicType {
     }
 
     @Override
-    public Object delegate(Object mimic) {
+    public Object disguise(Object mimic) {
         return delegate.apply(mimic);
     }
 }

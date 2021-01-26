@@ -7,6 +7,7 @@ import java.lang.ref.SoftReference;
 import java.lang.reflect.Method;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiFunction;
 import java.util.function.Function;
@@ -47,7 +48,7 @@ final class internal {
     }
 
     static final AtomicReference<Predicate<Method>> getterPredicate = new AtomicReference<>(ReflectUtil::javaBeanGetterPredicate);
-
+    static final AtomicBoolean fluent = new AtomicBoolean(false);
     static final Map<Class<?>, SoftReference<Method[]>> reflectMethodsCache = new ConcurrentHashMap<>();
     static final Map<Class<?>, SoftReference<List<Method>>> reflectGetterCache = new ConcurrentHashMap<>();
     static final Map<Class<?>, Class<?>> reflectInterfaceCache = new ConcurrentHashMap<>();
