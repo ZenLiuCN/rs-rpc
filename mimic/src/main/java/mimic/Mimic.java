@@ -1,6 +1,5 @@
 package mimic;
 
-import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.HashMap;
@@ -21,10 +20,8 @@ import static mimic.MimicType.mimicTypes;
  * @apiNote
  * @since 2021-01-24
  */
-@Slf4j
-public class Mimic<T> extends BaseDelegator<T> {
+public final class Mimic<T> extends BaseDelegator<T> {
     private final HashMap<String, MimicType> ref;
-
 
     void setter(String field, Object value) {
         if (value == null) {
@@ -42,7 +39,6 @@ public class Mimic<T> extends BaseDelegator<T> {
             ref.put(field, mimicType);
         }
     }
-
     Object getter(String field) {
         if (ref.containsKey(field)) {
             return ref.get(field).disguise(NULL.restore(values.get(field)));

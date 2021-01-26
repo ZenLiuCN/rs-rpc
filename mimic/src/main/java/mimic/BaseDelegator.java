@@ -65,7 +65,7 @@ abstract class BaseDelegator<T> implements Delegator<T>, InvocationHandler {
     @SneakyThrows
     protected final Object commonHandler(Method method, Object[] args, int length, String name) {
         if (length == 0 && name.equals("toString")) {
-            return type + "$" + this.getClass().getSimpleName() + values.toString();
+            return this.toString();
         } else if (length == 1 && name.equals("equals")) {
             return this.equals(args[0]);
         } else if (length == 0 && name.equals("hashCode")) {
@@ -123,7 +123,7 @@ abstract class BaseDelegator<T> implements Delegator<T>, InvocationHandler {
         if (memo.containsKey(name)) {
             return memo.get(name);
         }
-        if (CommonMethodName.contains(name) || method.isDefault()) {
+        if (CommonMethodName.contains(name)) {
             final Tuple2<Integer, String> r = tuple(-1, name);
             memo.put(name, r);
             return r;

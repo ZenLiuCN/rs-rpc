@@ -7,6 +7,7 @@ import io.protostuff.LinkedBuffer;
 import io.protostuff.runtime.DefaultIdStrategy;
 import io.protostuff.runtime.IdStrategy;
 import io.protostuff.runtime.RuntimeSchema;
+import lombok.extern.slf4j.Slf4j;
 import mimic.Delegator;
 import mimic.Mimic;
 import mimic.Proxy;
@@ -21,6 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  * @apiNote
  * @since 2021-01-26
  */
+@Slf4j
 public class MimicTest {
     @Test
     void simpleProxy() {
@@ -32,8 +34,8 @@ public class MimicTest {
         final OuterMost mimic = MimicApi.mimic(delegate);
         assertEquals(123L, mimic.getId());
         assertEquals("aName", mimic.getName());
-        System.out.println(mimic);
-        System.out.println(delegate);
+        log.info("light proxy {}", delegate);
+        log.info("light mimic {}", mimic);
     }
 
     @Test
@@ -49,11 +51,11 @@ public class MimicTest {
         final Proxy<OuterMost> om = MimicApi.proxyOf(OuterMost.class);
         om.set("Id", 123L).set("Name", "aName");
         mimic.setOuterMost(om.disguise());
-        System.out.println(mimic);
-        System.out.println(mimic.getOuterMost());
-        System.out.println(delegate);
+        log.info("proxy :{}", delegate);
+        log.info("mimic :{}", mimic);
+        log.info("mimic inner :{}", mimic.getOuterMost());
         final Delegator<?> reveal = MimicApi.reveal(mimic);
-        if (reveal != null) System.out.println(reveal.dump());
+        if (reveal != null) log.info("reveal mimic {}", reveal.dump());
     }
 
     @Test
@@ -74,23 +76,22 @@ public class MimicTest {
         final OuterNestDeepMost mimic = MimicApi.mimic(p.disguise());
         assertEquals(12315L, mimic.getId());
         assertEquals("aName", mimic.getName());
-        System.out.println(mimic);
-        System.out.println(mimic.getOuterMost());
-        System.out.println(delegate);
-        System.out.println("dump");
+        log.info("mimic {}", mimic);
+        log.info("mimic inner {}", mimic.getOuterMost());
+
         final Delegator<?> first = MimicApi.reveal(mimic);
-        if (first != null) System.out.println(first.dump());
+        if (first != null) log.info("reveal {}", first.dump());
         Delegator<?> reveal = MimicApi.reveal(mimic.getOuterMost());
-        if (reveal != null) System.out.println(reveal.dump());
+        if (reveal != null) log.info("reveal {}", reveal.dump());
         reveal = MimicApi.reveal(((OuterNestMost) reveal.disguise()).getOuterMost());
-        if (reveal != null) System.out.println(reveal.dump());
+        if (reveal != null) log.info("reveal {}", reveal.dump());
         final RuntimeSchema<Mimic> schema = RuntimeSchema.createFrom(Mimic.class, STRATEGY);
         final byte[] bytes = toByteArray((Mimic) first, schema, LinkedBuffer.allocate(512));
-        System.out.println(bytes.length + "\n" + ByteBufUtil.prettyHexDump(Unpooled.copiedBuffer(bytes)));
+        log.info("length {} \n {}", bytes.length, ByteBufUtil.prettyHexDump(Unpooled.copiedBuffer(bytes)));
         final Mimic msg = schema.newMessage();
         mergeFrom(bytes, msg, schema);
-        System.out.println(msg.disguise());
-        System.out.println(msg.disguise().equals(mimic));
+        log.info("restored :{} ", msg.disguise());
+        log.info("restored equal original: {} ", msg.disguise().equals(mimic));
     }
 
     static final DefaultIdStrategy STRATEGY = new DefaultIdStrategy(
