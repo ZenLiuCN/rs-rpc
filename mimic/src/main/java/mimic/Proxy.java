@@ -151,9 +151,26 @@ public final class Proxy<T> implements InvocationHandler, Delegator<T> {
         } else if (length == 0 && name.equals("toString")) {
             return type + "$Proxy" + values.toString();
         } else if (length == 1 && name.equals("equals")) {
-            return args[0].equals(values);
+            return this.equals(args[0]);
         } else if (length == 0 && name.equals("hashCode")) {
-            return values.hashCode();
+            return this.hashCode();
+        } else if (length == 0 && name.equals("getClass")) {
+            return type;
+        } else if (length == 0 && name.equals("wait")) {
+            this.wait();
+            return null;
+        } else if (length == 1 && name.equals("wait")) {
+            this.wait((Long) args[0]);
+            return null;
+        } else if (length == 2 && name.equals("wait")) {
+            this.wait((Long) args[0], (Integer) args[1]);
+            return null;
+        } else if (length == 0 && name.equals("notify")) {
+            this.notify();
+            return null;
+        } else if (length == 0 && name.equals("notifyAll")) {
+            this.notifyAll();
+            return null;
         } else if (method.isDefault()) {
             getResult();
             try {
@@ -185,6 +202,23 @@ public final class Proxy<T> implements InvocationHandler, Delegator<T> {
     @Override
     public @Nullable Object get(String field) {
         return NULL.restore(values.get(field));
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof Proxy)) {
+            final Object o1 = Delegator.tryRemoveProxy(o);
+            if (!(o1 instanceof Proxy)) return false;
+            return equals(o1);
+        }
+        Proxy<?> proxy = (Proxy<?>) o;
+        return type.equals(proxy.type) && values.equals(proxy.values);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(type, values);
     }
 
     @Override
