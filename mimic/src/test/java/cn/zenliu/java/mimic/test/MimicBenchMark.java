@@ -22,6 +22,12 @@ import java.util.concurrent.TimeUnit;
  * MimicBenchMark.deep2Mimic  avgt   40  11.011 ± 1.420  us/op
  * MimicBenchMark.deep3Mimic  avgt   40  17.042 ± 2.484  us/op
  * MimicBenchMark.lightMimic  avgt   40   4.033 ± 0.581  us/op
+ * <p>
+ * Benchmark                  Mode  Cnt   Score   Error  Units
+ * MimicBenchMark.deep2Mimic  avgt   40   8.705 ± 0.894  us/op
+ * MimicBenchMark.deep3Mimic  avgt   40  14.701 ± 1.898  us/op
+ * MimicBenchMark.lightMimic  avgt   40   3.680 ± 0.519  us/op
+ * almost: 1:2.8:4.8, should do not contains too much nested data.
  *
  * @author Zen.Liu
  * @apiNote
