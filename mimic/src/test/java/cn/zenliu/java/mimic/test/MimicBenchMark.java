@@ -20,11 +20,12 @@ import java.util.concurrent.TimeUnit;
  * experiments, perform baseline and negative tests that provide experimental control, make sure
  * the benchmarking environment is safe on JVM/OS/HW level, ask for reviews from the domain experts.
  * Do not assume the numbers tell you what you want them to tell.
- * <p>
+ * </p><p>
  * Benchmark                  Mode  Cnt   Score    Error  Units
  * MimicBenchMark.deep2Mimic  avgt  100  19.732 ± 10.214  us/op
  * MimicBenchMark.deep3Mimic  avgt  100  30.132 ±  9.448  us/op
  * MimicBenchMark.lightMimic  avgt  100  30.017 ± 80.168  us/op
+ * </p>
  *
  * @author Zen.Liu
  * @apiNote
