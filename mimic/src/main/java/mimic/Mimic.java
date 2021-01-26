@@ -77,6 +77,10 @@ public class Mimic<T> implements InvocationHandler, Delegator<T> {
             return null;
         } else if (length == 0 && name.equals("toString")) {
             return type + "$Mimic" + values.toString();
+        } else if (length == 1 && name.equals("equals")) {
+            return args[0].equals(values);
+        } else if (length == 0 && name.equals("hashCode")) {
+            return values.hashCode();
         } else if (method.isDefault()) {
             getResult();
             try {
