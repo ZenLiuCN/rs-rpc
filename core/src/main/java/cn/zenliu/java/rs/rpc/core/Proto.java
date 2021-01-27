@@ -4,6 +4,7 @@ import io.protostuff.LinkedBuffer;
 import io.protostuff.ProtostuffIOUtil;
 import io.protostuff.Schema;
 import io.protostuff.runtime.DefaultIdStrategy;
+import io.protostuff.runtime.Delegate;
 import io.protostuff.runtime.IdStrategy;
 import io.protostuff.runtime.RuntimeSchema;
 import mimic.Delegator;
@@ -17,8 +18,48 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import java.util.regex.Pattern;
 
+import static cn.zenliu.java.rs.rpc.core.Proto.internal.STRATEGY;
+import static cn.zenliu.java.rs.rpc.core.Proto.internal.staticMapping;
+
 
 public interface Proto {
+    /**
+     * use to mapping top level class as other class
+     *
+     * @param from source type
+     * @param to   target type
+     * @return null or last setting type
+     */
+    static Class<?> registerProtoStaticMapping(Class<?> from, Class<?> to) {
+        return staticMapping.put(from, to);
+    }
+
+    /**
+     * clean all static mapping
+     */
+    static void clearProtoStaticMapping() {
+        staticMapping.clear();
+    }
+
+    /**
+     * configure Protostuff delegate
+     *
+     * @param delegate the delegate
+     */
+    static void registerDelegate(Delegate<?> delegate) {
+        STRATEGY.registerDelegate(delegate);
+    }
+
+    /**
+     * configure Protostuff delegate
+     *
+     * @param delegate  the delegate
+     * @param className the delegated class name
+     */
+    static void registerDelegate(String className, Delegate<?> delegate) {
+        STRATEGY.registerDelegate(className, delegate);
+    }
+
     static byte[] to(Object o) {
         //  synchronized (internal.buffer) {
         Object instance;
@@ -79,7 +120,7 @@ public interface Proto {
         static final Map<String, Schema<Object>> schemaPool = new ConcurrentHashMap<>();
         static final Function<String, Schema<Object>> schemaOf = Sneaky.function(internal::classFromString).andThen(internal::getSchema);
         static final Function<Object, Schema<Object>> schemaFrom = Sneaky.function(Object::getClass).andThen(internal::getSchema);
-
+        static final Map<Class<?>, Class<?>> staticMapping = new ConcurrentHashMap<>();
         @SuppressWarnings("unchecked")
         static Schema<Object> getSchema(Class<?> clz) {
             Schema<Object> schema = schemaPool.get(clz.getCanonicalName());
