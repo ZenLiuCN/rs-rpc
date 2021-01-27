@@ -135,6 +135,6 @@ public interface Rpc {
      * @return Proxy with data from Instance
      */
     static <T> T delegateDeep(T instance, Class<T> interfaceType) {
-        return (T) MimicUtil.mimic(instance, interfaceType).disguise();
+        return MimicUtil.mimic(instance, interfaceType).disguise();
     }
 }

@@ -91,17 +91,24 @@ public interface MimicUtil {
      * @return null|interface class
      */
     static Class<?> findInterface(Class<?> clazz) {
-        if (reflectInterfaceCache.containsKey(clazz)) return reflectInterfaceCache.get(clazz);
+        if (reflectInterfaceCache.containsKey(clazz)) {
+            final Class<?> aClass = reflectInterfaceCache.get(clazz);
+            if (aClass.isAssignableFrom(NULL.class)) {
+                return null;
+            }
+            return aClass;
+        }
         final Class<?>[] interfaces = clazz.getInterfaces();
         if (interfaces == null || interfaces.length == 0
             || isCommonInterface(interfaces[0])
             || !interfaceNamePredicate.get().test(interfaces[0].getName())) {
+            reflectInterfaceCache.put(clazz, NULL.class);
             return null;
         } else {//check if a full instance
             final List<String> lists = getterMethodsMapping(clazz, Method::getName, false);
             final List<String> list = getterMethodsMapping(interfaces[0], Method::getName, false);
             if (!list.containsAll(lists)) {
-                reflectInterfaceCache.put(clazz, null);
+                reflectInterfaceCache.put(clazz, NULL.class);
                 return null;
             } else {
                 reflectInterfaceCache.put(clazz, interfaces[0]);
