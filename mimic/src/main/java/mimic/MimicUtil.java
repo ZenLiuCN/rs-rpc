@@ -28,6 +28,36 @@ public interface MimicUtil {
     }
 
     /**
+     * register a Static None Mimic Mapping Method for a Exactly Instance Class
+     *
+     * @param realType the instance class
+     * @param mapping  function to convert instance to other instance (both never be a interface)
+     * @return does replaced an old definition.
+     */
+    static boolean registerStaticMapping(Class<?> realType, Function<Object, Object> mapping) {
+        return staticMapping.put(realType, mapping) != null;
+    }
+
+    static void clearStaticMapping() {
+        staticMapping.clear();
+    }
+
+    /**
+     * register a Static None Mimic Mapping Method for a  Instance Match the predicate
+     *
+     * @param predicate the method to predicate a Instance should mapping by hand
+     * @param mapping   the mapping method.
+     * @return does replaced an old definition.
+     */
+    static boolean registerPredicateMapping(Predicate<Object> predicate, Function<Object, Object> mapping) {
+        return predicateMapping.put(predicate, mapping) != null;
+    }
+
+    static void clearPredicateMapping() {
+        predicateMapping.clear();
+    }
+
+    /**
      * process common container
      *
      * @param instance  the instance
@@ -129,6 +159,13 @@ public interface MimicUtil {
     static Object autoMimic(Object instance) {
         if (instance == null) return NULL.Null;
         if (instance instanceof Mimic) return instance;
+        if (staticMapping.containsKey(instance.getClass())) {
+            return staticMapping.get(instance.getClass()).apply(instance);
+        } else if (!predicateMapping.isEmpty()) {
+            for (Predicate<Object> next : predicateMapping.keySet()) {
+                if (next.test(instance)) return predicateMapping.get(next).apply(instance);
+            }
+        }
         final Object proxy = Delegator.tryRemoveProxy(instance);
         if (proxy instanceof Mimic) return proxy;
         final Class<?> aClass = instance.getClass();

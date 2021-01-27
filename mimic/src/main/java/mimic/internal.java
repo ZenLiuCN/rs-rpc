@@ -52,4 +52,6 @@ final class internal {
     static final Map<Class<?>, SoftReference<Method[]>> reflectMethodsCache = new ConcurrentHashMap<>();
     static final Map<Class<?>, SoftReference<List<Method>>> reflectGetterCache = new ConcurrentHashMap<>();
     static final Map<Class<?>, Class<?>> reflectInterfaceCache = new ConcurrentHashMap<>();
+    static final Map<Class<?>, Function<Object, Object>> staticMapping = new ConcurrentHashMap<>();
+    static final Map<Predicate<Object>, Function<Object, Object>> predicateMapping = new ConcurrentHashMap<>();
 }
