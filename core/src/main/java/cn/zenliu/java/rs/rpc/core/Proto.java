@@ -1,5 +1,7 @@
 package cn.zenliu.java.rs.rpc.core;
 
+import io.netty.buffer.ByteBufUtil;
+import io.netty.buffer.Unpooled;
 import io.protostuff.LinkedBuffer;
 import io.protostuff.ProtostuffIOUtil;
 import io.protostuff.Schema;
@@ -11,6 +13,8 @@ import mimic.Delegator;
 import mimic.Mimic;
 import mimic.Proxy;
 import org.jooq.lambda.Sneaky;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.lang.reflect.Field;
 import java.util.Map;
@@ -60,6 +64,8 @@ public interface Proto {
         STRATEGY.registerDelegate(className, delegate);
     }
 
+    Logger log = LoggerFactory.getLogger(Proto.class)
+
     static byte[] to(Object o) {
         //  synchronized (internal.buffer) {
         Object instance;
@@ -68,6 +74,9 @@ public interface Proto {
             h.setAccessible(true);
             instance = h.get(o);
         } catch (Exception ex) {
+            if (log.isDebugEnabled()) {
+                log.error("error to de proxy of {} ", o, ex);
+            }
             instance = o;
         }
         final Schema<Object> schema = internal.schemaFrom.apply(instance);
@@ -95,6 +104,9 @@ public interface Proto {
             o = schema.newMessage();
             ProtostuffIOUtil.mergeFrom(data, o, schema);
         } catch (Exception e) {
+            if (log.isDebugEnabled()) {
+                log.error("error to decode message of {} \n{}", schema.typeClass(), ByteBufUtil.prettyHexDump(Unpooled.copiedBuffer(data)), e);
+            }
             schema = internal.getSchema(Proxy.class);
             if (schema == null) throw new IllegalStateException("not found schema for type: " + clz);
             o = schema.newMessage();
@@ -121,6 +133,7 @@ public interface Proto {
         static final Function<String, Schema<Object>> schemaOf = Sneaky.function(internal::classFromString).andThen(internal::getSchema);
         static final Function<Object, Schema<Object>> schemaFrom = Sneaky.function(Object::getClass).andThen(internal::getSchema);
         static final Map<Class<?>, Class<?>> staticMapping = new ConcurrentHashMap<>();
+
         @SuppressWarnings("unchecked")
         static Schema<Object> getSchema(Class<?> clz) {
             Schema<Object> schema = schemaPool.get(clz.getCanonicalName());
