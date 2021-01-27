@@ -64,7 +64,7 @@ public interface Proto {
         STRATEGY.registerDelegate(className, delegate);
     }
 
-    Logger log = LoggerFactory.getLogger(Proto.class)
+    Logger log = LoggerFactory.getLogger(Proto.class);
 
     static byte[] to(Object o) {
         //  synchronized (internal.buffer) {
