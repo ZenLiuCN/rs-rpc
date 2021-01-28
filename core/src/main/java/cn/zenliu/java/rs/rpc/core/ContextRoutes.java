@@ -7,6 +7,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
@@ -31,8 +32,8 @@ interface ContextRoutes extends ContextRemoteServices, ContextServices {
     AtomicReference<Set<String>> getRoutes();
 
     default void updateRoutes(Remote... exclude) {
-        final Set<String> routes = getServices().toSetWith(isRoute() ? getDomains() : null);
-        onDebug("update routes {} to {} ", getRoutes().get(), routes);
+        final Set<String> routes = getServiceName(isRoute() ? getDomains() : null);
+        onDebug("update routes {} to {} ", () -> new Object[]{getRoutes().get(), routes});
         getRoutes().set(routes);
         syncServMeta(exclude);
     }
@@ -43,9 +44,7 @@ interface ContextRoutes extends ContextRemoteServices, ContextServices {
         final List<String> service = new ArrayList<>();
         if (forRemote != null && !forRemote.service.isEmpty()) {
             for (String route : routes) {
-                if (forRemote.service.contains(deRouteMark(route))) {
-                    continue;
-                } else {
+                if (!forRemote.service.contains(deRouteMark(route)) && !forRemote.service.contains(route)) {
                     service.add(route);
                 }
             }
@@ -60,23 +59,20 @@ interface ContextRoutes extends ContextRemoteServices, ContextServices {
     }
 
     default void processRemoteUpdate(Remote in, Remote old, boolean known) {
-
         if (old == null && in.getName().equals(NONE_META_NAME)) {
             onDebug("a new connection found {} \n sync serv meta :{}", in, getRoutes().get());
             getRemotes().put(in.idx, in);
             if (!known) pushServMeta(null, in);//todo
             return;
         }
-
         final int remoteIdx;
         if (old != null && old.getName().equals(NONE_META_NAME)) {
             remoteIdx = prepareRemoteName(in.getName());
             getRemotes().remove(old.getIdx());
-            pushServMeta(null, in);//push current meta to this remote for first update real Meta
+            //  if (!known) pushServMeta(null, in);//push current meta to this remote for first update real Meta
         } else {
             remoteIdx = old != null && old.getIdx() >= 0 ? old.getIdx() : prepareRemoteName(in.getName());
         }
-
         if (getRemotes().containsKey(remoteIdx)) {
             in.setIdx(remoteIdx);
             final Remote olderRemote = getRemotes().get(remoteIdx);
@@ -92,11 +88,8 @@ interface ContextRoutes extends ContextRemoteServices, ContextServices {
         }
         if (updateRemoteService(in, old)) {
             updateRoutes(in);
-            if (!known) {
-                onDebug("remove and update meta \n FROM {} \nTO {} with sync ", old, in);
-                pushServMeta(null, in);
-            }
-        } else if (!known) {
+        }
+        if (!known) {
             onDebug("remove and update meta \n FROM {} \nTO {} with sync ", old, in);
             pushServMeta(null, in);
         }
@@ -107,13 +100,12 @@ interface ContextRoutes extends ContextRemoteServices, ContextServices {
      */
     default void syncServMeta(Remote... exclude) {
         if (getRemotes().isEmpty()) return;
+        final List<Remote> excludes = Arrays.asList(exclude);
         onDebug("will sync serv meta {} to remote {}  ", getRoutes().get(), getRemotes());
         getRemotes().forEach((i, v) -> {
-            for (Remote remote : exclude) {
-                if (remote == v) {
-                    onDebug("skip remote {} for is marked as Skip", getRemoteNames().get(i));
-                    return;
-                }
+            if (excludes.contains(v)) {
+                onDebug("skip remote {} for is marked as Skip", getRemoteNames().get(i));
+                return;
             }
             onDebug("sync serv meta to remote [{}]: {} ", v, getRoutes().get());
             pushServMeta(null, v);
@@ -125,8 +117,8 @@ interface ContextRoutes extends ContextRemoteServices, ContextServices {
     }
 
     @Override
-    default boolean addService(String service) {
-        final boolean r = ContextServices.super.addService(service);
+    default boolean addService(Class<?> clazz, Object service) {
+        final boolean r = ContextServices.super.addService(clazz, service);
         if (r) updateRoutes();
         return r;
     }

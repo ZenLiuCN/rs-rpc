@@ -13,7 +13,6 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
-import java.util.function.Predicate;
 
 
 interface ProxyUtil {
@@ -33,15 +32,16 @@ interface ProxyUtil {
     Object[] DEFAULT = new Object[0];
 
     static ClientCreator clientCreatorBuilder(
-        Context ctx,
+        ContextServices ctx,
         doAndForget fire,
         doForResponse request
     ) {
-
         return (clientKlass, argumentProcessor, useFNF) -> {
+            Object instance = ctx.validateProxy(clientKlass);
+            if (instance != null) return instance;
             final String canonicalName = clientKlass.getCanonicalName();
             final Map<String, Function<Object[], Object>> cache = new ConcurrentHashMap<>();
-            return Proxy.newProxyInstance(clientKlass.getClassLoader(), new Class[]{clientKlass}, (p, m, a) -> {
+            instance = Proxy.newProxyInstance(clientKlass.getClassLoader(), new Class[]{clientKlass}, (p, m, a) -> {
                 if (m.getName().equals("toString") && m.getParameterCount() == 0) {
                     return canonicalName + "$Proxy$" + ctx.getName();
                 }
@@ -81,6 +81,8 @@ interface ProxyUtil {
                 }
                 return handle.apply(a == null ? DEFAULT : a);
             });
+            ctx.addProxy(clientKlass, instance);
+            return instance;
         };
     }
 
@@ -91,13 +93,12 @@ interface ProxyUtil {
 
     @SuppressWarnings("unchecked")
     static ServiceRegister serviceRegisterBuilder(
-        Context ctx,
-        Predicate<String> serviceAdder,
+        ContextServices ctx,
         BiConsumer<String, Function<Object[], Result<Object>>> handlerAdder
     ) {
         return (service, serviceKlass, resultProcessor) -> {
             final String canonicalName = serviceKlass.getCanonicalName();
-            if (!serviceAdder.test(canonicalName)) {
+            if (!ctx.addService(serviceKlass, service)) {
                 throw new IllegalStateException("service is already registered!" + canonicalName + ";");
             }
             for (Method method : serviceKlass.getMethods()) {

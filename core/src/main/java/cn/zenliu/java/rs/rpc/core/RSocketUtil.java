@@ -20,6 +20,7 @@ import reactor.util.retry.Retry;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Objects;
+import java.util.function.Supplier;
 
 /**
  * @author Zen.Liu
@@ -27,6 +28,8 @@ import java.util.Objects;
  * @since 2021-01-23
  */
 public interface RSocketUtil {
+
+
     static ServerTransport<? extends Closeable> buildTransport(Config.ServerConfig config) {
         switch (config.getMode()) {
             case 0:
@@ -80,16 +83,18 @@ public interface RSocketUtil {
         return Retry.indefinitely();
     }
 
-    static Mono<? extends Closeable> buildServer(SocketAcceptor acceptor, Config.ServerConfig config) {
-        final ServerTransport<? extends Closeable> transport = buildTransport(config);
-        final RSocketServer builder = RSocketServer.create()
-            .payloadDecoder(config.getPayloadCodec() == 1 ? PayloadDecoder.DEFAULT : PayloadDecoder.ZERO_COPY)
-            .acceptor(acceptor);
-        if (config.getResume() != null) builder.resume(buildResume(config.getResume(), false));
-        if (config.getFragment() != null) builder.fragment(config.getFragment());
-        if (config.getMaxInboundPayloadSize() != null) builder.maxInboundPayloadSize(config.getMaxInboundPayloadSize());
-        return builder.bind(transport);
-
+    static Supplier<Mono<? extends Closeable>> buildServer(SocketAcceptor acceptor, Config.ServerConfig config) {
+        return () -> {
+            final ServerTransport<? extends Closeable> transport = buildTransport(config);
+            final RSocketServer builder = RSocketServer.create()
+                .payloadDecoder(config.getPayloadCodec() == 1 ? PayloadDecoder.DEFAULT : PayloadDecoder.ZERO_COPY)
+                .acceptor(acceptor);
+            if (config.getResume() != null) builder.resume(buildResume(config.getResume(), false));
+            if (config.getFragment() != null) builder.fragment(config.getFragment());
+            if (config.getMaxInboundPayloadSize() != null)
+                builder.maxInboundPayloadSize(config.getMaxInboundPayloadSize());
+            return builder.bind(transport);
+        };
     }
 
     @FunctionalInterface
@@ -97,21 +102,24 @@ public interface RSocketUtil {
         Mono<Payload> build(boolean resume);
     }
 
-    static Mono<? extends Closeable> buildClient(SocketAcceptor acceptor, SetupSupplierBuilder setupSupplierBuilder, Config.ClientConfig config) {
-        final RSocketConnector builder = RSocketConnector.create()
-            .reconnect(buildRetry(config.getRetry()))
-            .payloadDecoder(config.getPayloadCodec() == 1 ? PayloadDecoder.DEFAULT : PayloadDecoder.ZERO_COPY)
-            .keepAlive(
-                config.getKeepAliveInterval() == null ? Duration.ofSeconds(20) : config.getKeepAliveInterval(),
-                config.getKeepAliveMaxLifeTime() == null ? Duration.ofSeconds(90) : config.getKeepAliveMaxLifeTime()
-            )
-            .setupPayload(setupSupplierBuilder.build(config.getResume() != null)) //current setup from client is support resume or not
-            .acceptor(acceptor);
-        if (config.getFragment() != null) builder.fragment(config.getFragment());
-        if (config.getMaxInboundPayloadSize() != null) builder.maxInboundPayloadSize(config.getMaxInboundPayloadSize());
-        if (config.getResume() != null) builder
-            .resume(buildResume(config.getResume(), true));
-        return builder.connect(buildTransport(config));
+    static Supplier<Mono<? extends Closeable>> buildClient(SocketAcceptor acceptor, SetupSupplierBuilder setupSupplierBuilder, Config.ClientConfig config) {
+        return () -> {
+            final RSocketConnector builder = RSocketConnector.create()
+                .reconnect(buildRetry(config.getRetry()))
+                .payloadDecoder(config.getPayloadCodec() == 1 ? PayloadDecoder.DEFAULT : PayloadDecoder.ZERO_COPY)
+                .keepAlive(
+                    config.getKeepAliveInterval() == null ? Duration.ofSeconds(20) : config.getKeepAliveInterval(),
+                    config.getKeepAliveMaxLifeTime() == null ? Duration.ofSeconds(90) : config.getKeepAliveMaxLifeTime()
+                )
+                .setupPayload(setupSupplierBuilder.build(config.getResume() != null)) //current setup from client is support resume or not
+                .acceptor(acceptor);
+            if (config.getFragment() != null) builder.fragment(config.getFragment());
+            if (config.getMaxInboundPayloadSize() != null)
+                builder.maxInboundPayloadSize(config.getMaxInboundPayloadSize());
+            if (config.getResume() != null) builder
+                .resume(buildResume(config.getResume(), true));
+            return builder.connect(buildTransport(config));
+        };
 
     }
 }

@@ -52,7 +52,7 @@ public final class UniqueList {
         return value.add(v);
     }
 
-    void withRouteMark(Consumer<String> consumer, Set<String> exclude) {
+    public void withRouteMark(Consumer<String> consumer, Set<String> exclude) {
         value.forEach(x -> {
             if (!(exclude.contains(deRouteMark(x))))
                 consumer.accept(x.endsWith(ROUTE_MARK + "") ? x : (x + ROUTE_MARK));

@@ -53,9 +53,9 @@ interface ContextRemoteServices extends ContextRemotes {
         for (String domain : newRemote.service) {
             onDebug("before register remote {} with service {}", newRemote.name, domain);
             final int index = getOrAddDomain(domain);
-            updated = updated || index == getDomains().size() - 1;
             ConcurrentSkipListSet<Remote> remotes = getRemoteServices().get(index);
             if (remotes == null) {
+                updated = true;//a new Domain found
                 remotes = new ConcurrentSkipListSet<>(Remote.weightComparator);
                 getRemoteServices().put(index, remotes);
             }

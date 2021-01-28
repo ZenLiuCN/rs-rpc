@@ -29,8 +29,10 @@ public class ServMeta implements Serializable {
     @Builder.Default final @Nullable List<String> service = new ArrayList<>();
     @Builder.Default final @Nullable Set<String> known = new HashSet<>();
 
-    public boolean isKnown(Set<String> services) {
-        return (services.isEmpty() && (known == null || known.isEmpty()))
-            || (known != null && known.size() == services.size() && services.containsAll(known));
+    public boolean isKnown(Set<String> routes) {
+        return (routes.isEmpty() && (known == null || known.isEmpty()))
+            || (known != null) && known.containsAll(routes);
     }
+
+
 }

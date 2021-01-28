@@ -67,6 +67,8 @@ public interface Config {
 
         @Nullable Retry getRetry();
 
+        @Nullable Retry getConnectRetry();
+
     }
 
     interface Retry {
@@ -157,6 +159,7 @@ public interface Config {
         final Duration keepAliveInterval;
         final Duration keepAliveMaxLifeTime;
         final Retry retry;
+        final Retry connectRetry;
         final ResumeSetting resume;
     }
 }

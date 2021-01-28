@@ -7,6 +7,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 /**
  * @author Zen.Liu
@@ -31,6 +32,8 @@ interface Context {
 
 
     void onDebug(String template, Object... args);
+
+    void onDebug(String template, Supplier<Object[]> args);
 
     void info(String template, Object... args);
 

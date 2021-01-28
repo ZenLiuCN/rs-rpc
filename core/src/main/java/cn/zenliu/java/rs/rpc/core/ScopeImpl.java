@@ -5,6 +5,7 @@ import cn.zenliu.java.rs.rpc.api.Scope;
 import cn.zenliu.java.rs.rpc.core.ProxyUtil.ClientCreator;
 import cn.zenliu.java.rs.rpc.core.ProxyUtil.ServiceRegister;
 import io.netty.buffer.ByteBufUtil;
+import io.rsocket.Closeable;
 import io.rsocket.Payload;
 import io.rsocket.RSocket;
 import io.rsocket.util.DefaultPayload;
@@ -13,12 +14,14 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.Unmodifiable;
 import reactor.core.publisher.Mono;
+import reactor.util.retry.Retry;
 
 import java.io.Serializable;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 import static cn.zenliu.java.rs.rpc.core.ProxyUtil.clientCreatorBuilder;
 import static cn.zenliu.java.rs.rpc.core.ProxyUtil.serviceRegisterBuilder;
@@ -37,7 +40,7 @@ public final class ScopeImpl extends ScopeContextImpl implements Scope, Serializ
     private static final long serialVersionUID = -7734615300814212060L;
 
     transient final ClientCreator clientCreator = clientCreatorBuilder(this, this::routeingFNF, this::routeingRR);
-    transient final ServiceRegister serviceRegister = serviceRegisterBuilder(this, this::addService, this::addHandler);
+    transient final ServiceRegister serviceRegister = serviceRegisterBuilder(this, this::addHandler);
 
 
     @Builder
@@ -93,24 +96,36 @@ public final class ScopeImpl extends ScopeContextImpl implements Scope, Serializ
         if (servers.containsKey(name))
             throw new IllegalStateException("a service or client with name is already exists ! name is " + name);
 
-        RSocketUtil.buildClient((setup, sending) -> {
-                final Remote remote = Remote.builder()
-                    .idx(-getRemoteNames().size())
-                    .socket(sending)
-                    .build();
-                if (debug.get()) {
-                    log.debug("remote connect to client [{}]", name);
-                }
-                final ServiceRSocket rSocket = new ServiceRSocket(name, remote, false);
-                remote.setServer(rSocket);
-                processRemoteUpdate(remote, null, false);
-                return Mono.just(rSocket);
-            }, resume -> Mono.fromCallable(() -> DefaultPayload.create(Proto.to(resume)))
-            , config)
-            .subscribe(client -> {
-                log.debug("rpc client [{}] started", name);
-                addServer(client, name);
-            });
+        final Supplier<Mono<? extends Closeable>> clientSupplier = RSocketUtil
+            .buildClient((setup, sending) -> {
+                    final Remote remote = Remote.builder()
+                        .idx(-getRemoteNames().size())
+                        .socket(sending)
+                        .build();
+                    if (debug.get()) {
+                        log.debug("remote connect to client [{}]", name);
+                    }
+                    final ServiceRSocket rSocket = new ServiceRSocket(name, remote, false);
+                    remote.setServer(rSocket);
+                    processRemoteUpdate(remote, null, false);
+                    return Mono.just(rSocket);
+                }, resume -> Mono.fromCallable(() -> DefaultPayload.create(Proto.to(resume)))
+                , config);
+        if (config.getConnectRetry() != null && config.getResume() == null) {
+            final Retry retry = RSocketUtil.buildRetry(config.getRetry());
+            clientSupplier.get()
+                .retryWhen(retry)
+                .subscribe(client -> {
+                    log.debug("rpc client [{}] started", name);
+                    addServer(client, name);
+                });
+        } else {
+            clientSupplier.get()
+                .subscribe(client -> {
+                    log.debug("rpc client [{}] started", name);
+                    addServer(client, name);
+                });
+        }
     }
 
     /**
@@ -120,7 +135,7 @@ public final class ScopeImpl extends ScopeContextImpl implements Scope, Serializ
     public void startServer(String name, Config.ServerConfig config) {
         if (servers.containsKey(name))
             throw new IllegalStateException("a service or client with name is already exists ! name is " + name);
-        RSocketUtil.buildServer((setup, sending) -> {
+        final Supplier<Mono<? extends Closeable>> serverSupplier = RSocketUtil.buildServer((setup, sending) -> {
             //current setup from client is support resume or not
             Boolean resume = Proto.from(ByteBufUtil.getBytes(setup.sliceData()), Boolean.class);
             final Remote remote = Remote.builder()
@@ -134,11 +149,11 @@ public final class ScopeImpl extends ScopeContextImpl implements Scope, Serializ
             remote.setServer(rSocket);
             processRemoteUpdate(remote, null, false);
             return Mono.just(rSocket);
-        }, config)
-            .subscribe(server -> {
-                info("started on {}:{}", config.getBindAddress() == null ? "0.0.0.0" : config.getBindAddress(), config.getPort());
-                addServer(server, name);
-            });
+        }, config);
+        serverSupplier.get().subscribe(server -> {
+            info("started on {}:{}", config.getBindAddress() == null ? "0.0.0.0" : config.getBindAddress(), config.getPort());
+            addServer(server, name);
+        });
     }
 
     /**
@@ -210,7 +225,14 @@ public final class ScopeImpl extends ScopeContextImpl implements Scope, Serializ
         }
 
         @Override
+        public void dispose() {
+            info("{} is dispose", this);
+            removeRegistry();
+        }
+
+        @Override
         public @NotNull Mono<Void> onClose() {
+            info("{} is close", this);
             removeRegistry();
             return Mono.empty();
         }

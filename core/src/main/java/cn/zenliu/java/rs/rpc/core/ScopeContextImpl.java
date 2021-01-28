@@ -6,6 +6,7 @@ import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import reactor.core.Disposable;
 
+import java.lang.ref.WeakReference;
 import java.time.Duration;
 import java.util.HashSet;
 import java.util.Map;
@@ -18,6 +19,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 /**
  * Hold all Context data in a Scope
@@ -50,6 +52,13 @@ abstract class ScopeContextImpl implements ContextScope, ContextServers, Context
     public void onDebug(String template, Object... args) {
         if (debug.get()) {
             log.debug("PRC [{}] " + template, argumentPrepend(args));
+        }
+    }
+
+    @Override
+    public void onDebug(String template, Supplier<Object[]> args) {
+        if (debug.get()) {
+            log.debug("PRC [{}] " + template, argumentPrepend(args.get()));
         }
     }
 
@@ -133,7 +142,11 @@ abstract class ScopeContextImpl implements ContextScope, ContextServers, Context
     /**
      * local registered service domain
      */
-    @Getter final UniqueList services = UniqueList.of(new CopyOnWriteArrayList<>());
+    @Getter final Map<Class<?>, WeakReference<Object>> services = new ConcurrentHashMap<>();
+    /**
+     * local Proxy Services
+     */
+    @Getter final Map<Class<?>, WeakReference<Object>> proxies = new ConcurrentHashMap<>();
     /**
      * local registered handler
      */
