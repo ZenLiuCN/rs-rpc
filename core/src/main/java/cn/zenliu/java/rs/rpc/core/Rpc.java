@@ -37,6 +37,17 @@ public interface Rpc {
     }
 
     /**
+     * set mimic use fluent getter mode or java bean mode
+     *
+     * @param fluent use fluent mode
+     */
+    static void setDelegateMode(boolean fluent) {
+        if (fluent)
+            MimicApi.useFluentMode();
+        else MimicApi.useJavaBeanMode();
+    }
+
+    /**
      * setting auto delegate interfaces predication
      *
      * @param predicate the method

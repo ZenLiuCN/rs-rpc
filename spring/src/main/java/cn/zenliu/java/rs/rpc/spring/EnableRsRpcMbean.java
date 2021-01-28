@@ -25,15 +25,16 @@ import java.util.Set;
  * @author Zen.Liu
  * @version 1.0
  * @apiNote
- * @since 2021-01-17
+ * @since 2021-01-28
  */
+
 
 @Target({ElementType.TYPE})
 @Retention(RetentionPolicy.RUNTIME)
 @Documented
-@Import({MBeanEnableRPC.RpcMBean.class})
-public @interface MBeanEnableRPC {
-    @ManagedResource(description = "管理RPC")
+@Import({EnableRsRpcMbean.RpcMBean.class})
+public @interface EnableRsRpcMbean {
+    @ManagedResource(description = "RsRpcManagement")
     final class RpcMBean {
         final ApplicationContext ctx;
 
@@ -41,16 +42,16 @@ public @interface MBeanEnableRPC {
             this.ctx = ctx;
         }
 
-        @ManagedOperation(description = "查看当前启用的Scope名称")
+        @ManagedOperation(description = "check all scope names")
         public Set<String> getScopeName() {
             return Rpc.scopes.keySet();
         }
 
 
-        @ManagedOperation(description = "查看或设置Debug")
+        @ManagedOperation(description = "view or set debug")
         @ManagedOperationParameters({
-            @ManagedOperationParameter(name = "name", description = "scope简化名称"),
-            @ManagedOperationParameter(name = "debug", description = "Null为查看,否则为设置"),
+            @ManagedOperationParameter(name = "name", description = "scope simple name"),
+            @ManagedOperationParameter(name = "debug", description = "null means view, or else is set"),
         })
         public Boolean actDebug(@NotNull String name, @Nullable Boolean debug) {
             final ScopeImpl bean = getBean(name);
@@ -58,10 +59,10 @@ public @interface MBeanEnableRPC {
             return bean.getDebug().get();
         }
 
-        @ManagedOperation(description = "查看或设置Timeout")
+        @ManagedOperation(description = "view or set timeout")
         @ManagedOperationParameters({
-            @ManagedOperationParameter(name = "name", description = "scope简化名称"),
-            @ManagedOperationParameter(name = "timeout", description = "Null为查看,否则为设置"),
+            @ManagedOperationParameter(name = "name", description = "scope simple name"),
+            @ManagedOperationParameter(name = "timeout", description = "null means view, or else is set"),
         })
         public Duration actTimeout(@NotNull String name, @Nullable Duration timeout) {
             final ScopeImpl bean = getBean(name);
@@ -69,22 +70,22 @@ public @interface MBeanEnableRPC {
             return bean.getTimeout().get();
         }
 
-        @ManagedOperation(description = "查看本地服务端")
-        @ManagedOperationParameter(name = "name", description = "scope简化名称")
+        @ManagedOperation(description = "view local RSocket Servers")
+        @ManagedOperationParameter(name = "name", description = "scope simple name")
         public Map<String, Boolean> localServices(@NotNull String name) {
             final ScopeImpl bean = getBean(name);
             return Seq.seq(bean.getServers()).map(t -> t.map2(Disposable::isDisposed)).toMap(Tuple2::v1, Tuple2::v2);
         }
 
-        @ManagedOperation(description = "查看本地注册的Service")
-        @ManagedOperationParameter(name = "name", description = "scope简化名称")
-        public List<String> localServiceName(@NotNull String name) {
+        @ManagedOperation(description = "check local registered services")
+        @ManagedOperationParameter(name = "name", description = "scope simple name")
+        public Set<String> localServiceName(@NotNull String name) {
             final ScopeImpl bean = getBean(name);
-            return bean.getServices().getValue();
+            return bean.getServiceName(null);
         }
 
-        @ManagedOperation(description = "查看远程服务")
-        @ManagedOperationParameter(name = "name", description = "scope简化名称")
+        @ManagedOperation(description = "view remotes")
+        @ManagedOperationParameter(name = "name", description = "scope simple name")
         public Map<String, Map<String, ?>> remotesRegistry(@NotNull String name) {
             final ScopeImpl bean = getBean(name);
             return Seq.seq(bean.getRemoteNames().getValue()).zipWithIndex()
@@ -93,8 +94,8 @@ public @interface MBeanEnableRPC {
                 .toMap(Tuple2::v1, Tuple2::v2);
         }
 
-        @ManagedOperation(description = "查看远程服务注册")
-        @ManagedOperationParameter(name = "name", description = "scope简化名称")
+        @ManagedOperation(description = "view remotes services")
+        @ManagedOperationParameter(name = "name", description = "scope simple name")
         public Map<String, List<Map<String, Object>>> remotes(@NotNull String name) {
             final ScopeImpl bean = getBean(name);
             return Seq.seq(bean.getRemoteServices())
@@ -102,6 +103,12 @@ public @interface MBeanEnableRPC {
                 .toMap(Tuple2::v1, Tuple2::v2);
         }
 
+        @ManagedOperation(description = "view local proxy services")
+        @ManagedOperationParameter(name = "name", description = "scope simple name")
+        public List<String> proxies(@NotNull String name) {
+            final ScopeImpl bean = getBean(name);
+            return bean.getProxiesList();
+        }
 
         private ScopeImpl getBean(String name) {
             if (name.equals(Rpc.GLOBAL_NAME)) {
