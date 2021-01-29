@@ -137,7 +137,7 @@ public interface MimicUtil {
         } else {//check if a full instance
             final List<String> lists = getterMethodsMapping(clazz, Method::getName, false);
             final List<String> list = getterMethodsMapping(interfaces[0], Method::getName, false);
-            if (!list.containsAll(lists)) {
+            if (!lists.containsAll(list)) {
                 reflectInterfaceCache.put(clazz, NULL.class);
                 return null;
             } else {
