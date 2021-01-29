@@ -29,7 +29,7 @@ abstract class BaseDelegator<T> implements Delegator<T>, InvocationHandler {
     protected final ConcurrentHashMap<String, Object> values;
     protected transient Constructor<MethodHandles.Lookup> constructor;
     protected transient Object[] result;
-    protected transient ConcurrentHashMap<String, Tuple2<Integer, String>> memo;
+    final static ConcurrentHashMap<String, Tuple2<Integer, String>> memo = new ConcurrentHashMap<>();
 
     protected BaseDelegator(Class<T> type, ConcurrentHashMap<String, Object> values) {
         this.type = type;
@@ -114,14 +114,21 @@ abstract class BaseDelegator<T> implements Delegator<T>, InvocationHandler {
 
     abstract void setter(String field, Object value);
 
+    static String tryDeGetter(String name) {
+        if (name.startsWith("get")) return name.substring(3);
+        if (name.startsWith("set")) return name.substring(3);
+        if (name.startsWith("is")) return name.substring(2);
+        return name;
+    }
+
     protected Tuple2<Integer, String> methodDecide(String name, int length, Method method) {
-        if (memo == null) {
-            synchronized (this) {
-                if (memo == null) memo = new ConcurrentHashMap<>();
-            }
-        }
-        if (memo.containsKey(name)) {
+        if (memo.containsKey(type.getCanonicalName() + '#' + name)) {
             return memo.get(name);
+        }
+        if (method.isDefault() && (!values.containsKey(name) && !values.containsKey(tryDeGetter(name)))) {
+            final Tuple2<Integer, String> r = tuple(-2, name);
+            memo.put(name, r);
+            return r;
         }
         if (CommonMethodName.contains(name)) {
             final Tuple2<Integer, String> r = tuple(-1, name);
