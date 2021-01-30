@@ -90,6 +90,7 @@ public interface MimicApi {
      *
      * @param instance the instance
      */
+    @SuppressWarnings("unchecked")
     static <T> @Nullable Mimic<T> mimicOf(T instance) {
         final Object o = MimicUtil.autoMimic(instance);
         if (o instanceof Mimic) return (Mimic<T>) o;
@@ -101,6 +102,7 @@ public interface MimicApi {
      *
      * @param instance the instance
      */
+    @SuppressWarnings("unchecked")
     static <T> T mimic(T instance) {
         return (T) MimicUtil.autoDisguise(MimicUtil.autoMimic(instance));
     }
@@ -115,5 +117,13 @@ public interface MimicApi {
         final Object o = Delegator.tryRemoveProxy(instance);
         if (o instanceof Delegator) return (Delegator<?>) o;
         return null;
+    }
+
+    static <K, V> ConcurrentReferenceHashMap<K, V> buildSoftConcurrentCache() {
+        return new ConcurrentReferenceHashMap<>(ConcurrentReferenceHashMap.ReferenceType.STRONG, ConcurrentReferenceHashMap.ReferenceType.SOFT);
+    }
+
+    static <K, V> ConcurrentReferenceHashMap<K, V> buildWeakConcurrentCache() {
+        return new ConcurrentReferenceHashMap<>(ConcurrentReferenceHashMap.ReferenceType.STRONG, ConcurrentReferenceHashMap.ReferenceType.WEAK);
     }
 }

@@ -29,6 +29,13 @@ import java.util.concurrent.TimeUnit;
  * MimicBenchMark.lightMimic  avgt   40   3.680 ± 0.519  us/op
  * almost: 1:2.8:4.8, should do not contains too much nested data.
  *
+ * MimicBenchMark.deep2Mimic      avgt   40  10.232 ± 5.391  us/op
+ * MimicBenchMark.deep3Mimic      avgt   40  12.863 ± 1.642  us/op
+ * MimicBenchMark.lightMimic      avgt   40   3.701 ± 1.204  us/op
+ * MimicBenchMark.readDeep2Mimic  avgt   40   0.807 ± 0.124  us/op
+ * MimicBenchMark.readDeep3Mimic  avgt   40   1.323 ± 0.322  us/op
+ * MimicBenchMark.readLightMimic  avgt   40   0.383 ± 0.077  us/op
+ *
  * @author Zen.Liu
  * @apiNote
  * @since 2021-01-26
@@ -78,14 +85,32 @@ public class MimicBenchMark {
     }
 
     @Benchmark
+    public void deep2Mimic(BenchmarkState state, Blackhole bh) {
+        bh.consume(MimicApi.mimic(state.outerNestMost));
+
+    }
+
+    @Benchmark
     public void deep3Mimic(BenchmarkState state, Blackhole bh) {
         bh.consume(MimicApi.mimic(state.outerNestDeepMost));
 
     }
 
+
     @Benchmark
-    public void deep2Mimic(BenchmarkState state, Blackhole bh) {
-        bh.consume(MimicApi.mimic(state.outerNestMost));
+    public void readLightMimic(BenchmarkState state, Blackhole bh) {
+        bh.consume(state.outerMostMimic.getName());
+
+    }
+
+    @Benchmark
+    public void readDeep2Mimic(BenchmarkState state, Blackhole bh) {
+        bh.consume(state.outerNestMostMimic.getOuterMost().getName());
+    }
+
+    @Benchmark
+    public void readDeep3Mimic(BenchmarkState state, Blackhole bh) {
+        bh.consume(state.outerNestDeepMostMimic.getOuterMost().getOuterMost().getName());
 
     }
 
@@ -95,13 +120,19 @@ public class MimicBenchMark {
         OuterMost outerMost;
         OuterNestMost outerNestMost;
         OuterNestDeepMost outerNestDeepMost;
-
+        OuterMost outerMostMimic;
+        OuterNestMost outerNestMostMimic;
+        OuterNestDeepMost outerNestDeepMostMimic;
 
         @Setup(Level.Trial)
         public void initialize() {
             outerMost = OuterMost.Outer.builder().id(123).name("123Name").build();
             outerNestMost = OuterNestMost.Outer.builder().id(1234).name("1234Name").outerMost(outerMost).build();
             outerNestDeepMost = OuterNestDeepMost.Outer.builder().id(12345).name("12345Name").outerMost(outerNestMost).build();
+
+            outerMostMimic = MimicApi.mimic(outerMost);
+            outerNestMostMimic = MimicApi.mimic(outerNestMost);
+            outerNestDeepMostMimic = MimicApi.mimic(outerNestDeepMost);
         }
     }
 }

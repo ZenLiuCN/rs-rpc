@@ -9,9 +9,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.function.Function;
 
 import static mimic.ReflectUtil.getterMethodsMapping;
+import static mimic.internal.buildSoftConcurrentCache;
 import static org.jooq.lambda.tuple.Tuple.tuple;
 
 /**
@@ -22,6 +24,8 @@ import static org.jooq.lambda.tuple.Tuple.tuple;
  * @since 2021-01-12
  */
 public final class Proxy<T> extends BaseDelegator<T> {
+    private static final long serialVersionUID = 5639462926823838734L;
+
     Proxy(Class<T> type) {
         super(type, new ConcurrentHashMap<>());
     }
@@ -79,7 +83,7 @@ public final class Proxy<T> extends BaseDelegator<T> {
     /**
      * Copier Cache
      */
-    public static final Map<Class<?>, Function<Object, Map<String, Object>>> copier = new ConcurrentHashMap<>();
+    final static ConcurrentMap<Class<?>, Function<Object, Map<String, Object>>> copier = buildSoftConcurrentCache();
 
     /**
      * Build a Delegate Proxy via Initial values

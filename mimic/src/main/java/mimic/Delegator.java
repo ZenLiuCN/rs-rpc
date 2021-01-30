@@ -2,6 +2,7 @@ package mimic;
 
 import org.jetbrains.annotations.Nullable;
 
+import java.io.Serializable;
 import java.lang.reflect.Field;
 import java.util.Optional;
 
@@ -10,7 +11,7 @@ import java.util.Optional;
  * @apiNote
  * @since 2021-01-24
  */
-public interface Delegator<T> {
+public interface Delegator<T> extends Serializable {
     T disguise();
 
     Object get(String field);

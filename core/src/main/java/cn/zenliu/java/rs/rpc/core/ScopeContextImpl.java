@@ -1,14 +1,19 @@
 package cn.zenliu.java.rs.rpc.core;
 
+import cn.zenliu.java.mimic.api.MimicApi;
 import cn.zenliu.java.rs.rpc.api.Result;
 import lombok.Getter;
+import mimic.ConcurrentReferenceHashMap;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import reactor.core.Disposable;
+import reactor.core.publisher.Flux;
+import reactor.core.scheduler.Schedulers;
 
 import java.lang.ref.WeakReference;
 import java.time.Duration;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -40,11 +45,28 @@ abstract class ScopeContextImpl implements ContextScope, ContextServers, Context
      * Scope route ability
      */
     @Getter final boolean route;
+    static List<WeakReference<ConcurrentReferenceHashMap<?, ?>>> purifyList = new CopyOnWriteArrayList<>();
 
+    static {
+
+        //auto update cache pool 10 minute
+        final Disposable disposable = Flux.interval(Duration.ofMinutes(10))
+            .publishOn(Schedulers.boundedElastic())
+            .subscribe(x -> {
+                purifyList.forEach(w -> {
+                    final ConcurrentReferenceHashMap<?, ?> target = w.get();
+                    if (target != null) target.purgeUnreferencedEntries();
+                    else purifyList.remove(w);
+                });
+            });
+        Runtime.getRuntime().addShutdownHook(new Thread(disposable::dispose));
+    }
 
     protected ScopeContextImpl(String name, boolean route) {
         this.name = name;
         this.route = route;
+        purifyList.add(new WeakReference<>(proxies));
+        purifyList.add(new WeakReference<>(services));
     }
 
 
@@ -142,11 +164,11 @@ abstract class ScopeContextImpl implements ContextScope, ContextServers, Context
     /**
      * local registered service domain
      */
-    @Getter final Map<Class<?>, WeakReference<Object>> services = new ConcurrentHashMap<>();
+    @Getter final ConcurrentReferenceHashMap<Class<?>, WeakReference<Object>> services = MimicApi.buildWeakConcurrentCache();
     /**
      * local Proxy Services
      */
-    @Getter final Map<Class<?>, WeakReference<Object>> proxies = new ConcurrentHashMap<>();
+    @Getter final ConcurrentReferenceHashMap<Class<?>, WeakReference<Object>> proxies = MimicApi.buildWeakConcurrentCache();
     /**
      * local registered handler
      */

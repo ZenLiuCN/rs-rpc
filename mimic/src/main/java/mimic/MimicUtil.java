@@ -5,7 +5,6 @@ import org.jetbrains.annotations.Nullable;
 import org.jooq.lambda.tuple.Tuple2;
 
 import java.lang.reflect.Method;
-import java.util.HashMap;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiFunction;
@@ -91,7 +90,7 @@ public interface MimicUtil {
         final List<Method> methods = getterMethods(type);
         Function<Object, Mimic<?>> delegateBuilder = x -> {
             final ConcurrentHashMap<String, Object> values = new ConcurrentHashMap<>();
-            final HashMap<String, MimicType> typeMap = new HashMap<>();
+            final ConcurrentHashMap<String, MimicType> typeMap = new ConcurrentHashMap<>();
             for (Method method : methods) {
                 final String field = getterNameToFieldName(method.getName());
                 final Object value = sneakyInvoker(x, method);

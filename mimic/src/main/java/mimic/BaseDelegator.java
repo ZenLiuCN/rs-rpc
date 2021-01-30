@@ -8,9 +8,11 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 import static mimic.ReflectUtil.CommonMethodName;
 import static mimic.ReflectUtil.accessible;
+import static mimic.internal.buildSoftConcurrentCache;
 import static mimic.internal.fluent;
 import static org.jooq.lambda.tuple.Tuple.tuple;
 
@@ -22,6 +24,7 @@ import static org.jooq.lambda.tuple.Tuple.tuple;
  * @since 2021-01-24
  */
 abstract class BaseDelegator<T> implements Delegator<T>, InvocationHandler {
+    private static final long serialVersionUID = -6499438977960561127L;
     /**
      * Delegate target type
      */
@@ -29,7 +32,8 @@ abstract class BaseDelegator<T> implements Delegator<T>, InvocationHandler {
     protected final ConcurrentHashMap<String, Object> values;
     protected transient Constructor<MethodHandles.Lookup> constructor;
     protected transient Object[] result;
-    final static ConcurrentHashMap<String, Tuple2<Integer, String>> memo = new ConcurrentHashMap<>();
+    final static ConcurrentMap<String, Tuple2<Integer, String>> memo = buildSoftConcurrentCache();
+
 
     protected BaseDelegator(Class<T> type, ConcurrentHashMap<String, Object> values) {
         this.type = type;
@@ -122,56 +126,72 @@ abstract class BaseDelegator<T> implements Delegator<T>, InvocationHandler {
     }
 
     protected Tuple2<Integer, String> methodDecide(String name, int length, Method method) {
-        if (memo.containsKey(type.getCanonicalName() + '#' + name)) {
-            return memo.get(name);
+        final String index = type.getCanonicalName() + '#' + name;
+        if (memo.containsKey(index)) {
+            return memo.get(index);
         }
-        if (method.isDefault() && (!values.containsKey(name) && !values.containsKey(tryDeGetter(name)))) {
-            final Tuple2<Integer, String> r = tuple(-2, name);
-            memo.put(name, r);
+        //a default calculate value
+        if (method.isDefault() && method.getReturnType() != Void.TYPE && length == 0 && (values.containsKey(name) || values.containsKey(tryDeGetter(name)))) {
+            final Tuple2<Integer, String> r = tuple(1, values.containsKey(name) ? name : tryDeGetter(name));
+            memo.put(index, r);
             return r;
         }
+        //normal default method
+        if (method.isDefault()) {
+            final Tuple2<Integer, String> r = tuple(-2, name);
+            memo.put(index, r);
+            return r;
+        }
+        //common method //todo hashCode should be store?
         if (CommonMethodName.contains(name)) {
             final Tuple2<Integer, String> r = tuple(-1, name);
-            memo.put(name, r);
+            memo.put(index, r);
             return r;
         }
+        //java bean getter
         if (length == 0 && name.startsWith("is") && method.getReturnType() != Void.TYPE && method.getReturnType() != type) {
             final Tuple2<Integer, String> r = tuple(1, name.substring(2));
-            memo.put(name, r);
+            memo.put(index, r);
             return r;
         }
         if (length == 0 && name.startsWith("get") && method.getReturnType() != Void.TYPE && method.getReturnType() != type) {
             final Tuple2<Integer, String> r = tuple(1, name.substring(3));
-            memo.put(name, r);
+            memo.put(index, r);
             return r;
         }
+        //fluent getter
         if (fluent.get() && length == 0 && method.getReturnType() != Void.TYPE && method.getReturnType() != type) {
             final Tuple2<Integer, String> r = tuple(1, name);
-            memo.put(name, r);
+            memo.put(index, r);
             return r;
         }
+        //java bean setter
         if (length == 1 && name.startsWith("set") && method.getReturnType() == Void.TYPE) {
             final Tuple2<Integer, String> r = tuple(2, name.substring(3));
-            memo.put(name, r);
+            memo.put(index, r);
             return r;
         }
+        //chain setter
         if (length == 1 && name.startsWith("set") && method.getReturnType() == type) {
             final Tuple2<Integer, String> r = tuple(3, name.substring(3));
-            memo.put(name, r);
+            memo.put(index, r);
             return r;
         }
+        //fluent setter
         if (fluent.get() && length == 1 && method.getReturnType() == Void.TYPE) {
             final Tuple2<Integer, String> r = tuple(2, name);
-            memo.put(name, r);
+            memo.put(index, r);
             return r;
         }
+        //fluent chain setter
         if (fluent.get() && length == 1 && method.getReturnType() == type) {
             final Tuple2<Integer, String> r = tuple(3, name);
-            memo.put(name, r);
+            memo.put(index, r);
             return r;
         }
+        //other
         final Tuple2<Integer, String> r = tuple(-2, name);
-        memo.put(name, r);
+        memo.put(index, r);
         return r;
     }
 

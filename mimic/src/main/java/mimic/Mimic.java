@@ -2,7 +2,6 @@ package mimic;
 
 import org.jetbrains.annotations.Nullable;
 
-import java.util.HashMap;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -21,7 +20,8 @@ import static mimic.MimicType.mimicTypes;
  * @since 2021-01-24
  */
 public final class Mimic<T> extends BaseDelegator<T> {
-    private final HashMap<String, MimicType> ref;
+    private static final long serialVersionUID = -8454411289395784830L;
+    private final ConcurrentHashMap<String, MimicType> ref = new ConcurrentHashMap<>();
 
     void setter(String field, Object value) {
         if (value == null) {
@@ -39,6 +39,7 @@ public final class Mimic<T> extends BaseDelegator<T> {
             ref.put(field, mimicType);
         }
     }
+
     Object getter(String field) {
         if (ref.containsKey(field)) {
             return ref.get(field).disguise(NULL.restore(values.get(field)));
@@ -46,9 +47,10 @@ public final class Mimic<T> extends BaseDelegator<T> {
         return NULL.restore(values.get(field));
     }
 
-    Mimic(Class<T> type, ConcurrentHashMap<String, Object> values, HashMap<String, MimicType> ref) {
+
+    Mimic(Class<T> type, ConcurrentHashMap<String, Object> values, ConcurrentHashMap<String, MimicType> ref) {
         super(type, values);
-        this.ref = ref;
+        this.ref.putAll(ref);
     }
 
     @Override
