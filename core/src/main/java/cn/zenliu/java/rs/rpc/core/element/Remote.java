@@ -1,6 +1,8 @@
-package cn.zenliu.java.rs.rpc.core;
+package cn.zenliu.java.rs.rpc.core.element;
 
-import cn.zenliu.java.rs.rpc.core.ScopeImpl.ServiceRSocket;
+import cn.zenliu.java.rs.rpc.core.impl.ScopeImpl.ServiceRSocket;
+import cn.zenliu.java.rs.rpc.core.proto.Proto;
+import cn.zenliu.java.rs.rpc.core.proto.ServMeta;
 import io.netty.buffer.ByteBufUtil;
 import io.rsocket.Payload;
 import io.rsocket.RSocket;
@@ -27,7 +29,7 @@ import java.util.*;
 @Slf4j
 @EqualsAndHashCode
 public final class Remote implements Serializable {
-    static final String NONE_META_NAME = "UNK";
+    public static final String NONE_META_NAME = "UNK";
     private static final long serialVersionUID = -7451694137919068872L;
     public static Comparator<Remote> weightComparator = Comparator.comparingInt(Remote::getWeight);
     /**
@@ -55,9 +57,10 @@ public final class Remote implements Serializable {
 
     public static Remote fromMeta(ServMeta r, boolean resume) {
         return Remote.builder()
-            .name(r.name)
+            .name(r.getName())
             .resume(resume)
-            .service(r.service == null || r.service.isEmpty() ? Collections.emptySet() : new HashSet<>(r.service))
+            .service(r.getService() == null || r.getService().isEmpty() ?
+                Collections.emptySet() : new HashSet<>(r.getService()))
             .build();
 
     }

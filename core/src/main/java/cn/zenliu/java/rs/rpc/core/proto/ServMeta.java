@@ -1,6 +1,7 @@
-package cn.zenliu.java.rs.rpc.core;
+package cn.zenliu.java.rs.rpc.core.proto;
 
 import lombok.Builder;
+import lombok.Getter;
 import lombok.ToString;
 import org.jetbrains.annotations.Nullable;
 
@@ -16,6 +17,7 @@ import java.util.Set;
  * @since 2021-01-18
  */
 @Builder
+@Getter
 @ToString
 public class ServMeta implements Serializable {
     private static final long serialVersionUID = -3906227121661168621L;

@@ -1,4 +1,4 @@
-package cn.zenliu.java.rs.rpc.core;
+package cn.zenliu.java.rs.rpc.core.util;
 
 import cn.zenliu.java.rs.rpc.api.Config;
 import io.netty.buffer.Unpooled;

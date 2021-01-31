@@ -1,11 +1,13 @@
-package cn.zenliu.java.rs.rpc.core;
+package cn.zenliu.java.rs.rpc.core.context;
 
+import cn.zenliu.java.rs.rpc.core.element.Remote;
+import cn.zenliu.java.rs.rpc.core.element.UniqueList;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentSkipListSet;
 
-import static cn.zenliu.java.rs.rpc.core.ScopeContextImpl.ROUTE_MARK;
+import static cn.zenliu.java.rs.rpc.core.context.ContextRoutes.ROUTE_MARK;
 
 /**
  * @author Zen.Liu
@@ -47,11 +49,11 @@ interface ContextRemoteServices extends ContextRemotes {
         boolean updated = false;
         onDebug("before update remote service: {} to {} \n {} {}", newRemote, oldRemote, getDomains(), getRemoteServices());
         if (oldRemote != null) {
-            oldRemote.service.forEach(v -> removeOldRemoteService(v, oldRemote));
+            oldRemote.getService().forEach(v -> removeOldRemoteService(v, oldRemote));
         }
         onDebug("after remove old when update remote service: {} to {} \n {} {}", newRemote, oldRemote, getDomains(), getRemoteServices());
-        for (String domain : newRemote.service) {
-            onDebug("before register remote {} with service {}", newRemote.name, domain);
+        for (String domain : newRemote.getService()) {
+            onDebug("before register remote {} with service {}", newRemote.getName(), domain);
             final int index = getOrAddDomain(domain);
             ConcurrentSkipListSet<Remote> remotes = getRemoteServices().get(index);
             if (remotes == null) {

@@ -1,9 +1,13 @@
-package cn.zenliu.java.rs.rpc.core;
+package cn.zenliu.java.rs.rpc.core.impl;
 
 import cn.zenliu.java.rs.rpc.api.Config;
 import cn.zenliu.java.rs.rpc.api.Scope;
-import cn.zenliu.java.rs.rpc.core.ProxyUtil.ClientCreator;
-import cn.zenliu.java.rs.rpc.core.ProxyUtil.ServiceRegister;
+import cn.zenliu.java.rs.rpc.core.element.Remote;
+import cn.zenliu.java.rs.rpc.core.proto.Proto;
+import cn.zenliu.java.rs.rpc.core.util.FunctorPayload;
+import cn.zenliu.java.rs.rpc.core.util.ProxyUtil.ClientCreator;
+import cn.zenliu.java.rs.rpc.core.util.ProxyUtil.ServiceRegister;
+import cn.zenliu.java.rs.rpc.core.util.RSocketUtil;
 import io.netty.buffer.ByteBufUtil;
 import io.rsocket.Closeable;
 import io.rsocket.Payload;
@@ -24,8 +28,8 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
-import static cn.zenliu.java.rs.rpc.core.ProxyUtil.clientCreatorBuilder;
-import static cn.zenliu.java.rs.rpc.core.ProxyUtil.serviceRegisterBuilder;
+import static cn.zenliu.java.rs.rpc.core.util.ProxyUtil.clientCreatorBuilder;
+import static cn.zenliu.java.rs.rpc.core.util.ProxyUtil.serviceRegisterBuilder;
 
 
 /**
@@ -50,7 +54,7 @@ public final class ScopeImpl extends ScopeContextImpl implements Scope, Serializ
     }
 
     static String dump(Remote remote, Payload payload) {
-        return "\n SERVICE: " + remote.name + " | SERVICES:" + remote.service + "| WEIGHT:" + remote.weight + "\n" +
+        return "\n SERVICE: " + remote.getName() + " | SERVICES:" + remote.getService() + "| WEIGHT:" + remote.getWeight() + "\n" +
             " META :\n" + ByteBufUtil.prettyHexDump(payload.sliceMetadata()) +
             "\n DATA :\n" + ByteBufUtil.prettyHexDump(payload.sliceData());
     }
@@ -191,7 +195,7 @@ public final class ScopeImpl extends ScopeContextImpl implements Scope, Serializ
     }
 
 
-    final class ServiceRSocket implements RSocket {
+    public final class ServiceRSocket implements RSocket {
         public final AtomicReference<Remote> remoteRef = new AtomicReference<>();
         public final String server;
         public final boolean serverMode;

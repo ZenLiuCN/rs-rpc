@@ -1,4 +1,4 @@
-package cn.zenliu.java.rs.rpc.core;
+package cn.zenliu.java.rs.rpc.core.proto;
 
 import cn.zenliu.java.rs.rpc.api.Tick;
 import lombok.Builder;

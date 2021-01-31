@@ -1,6 +1,7 @@
-package cn.zenliu.java.rs.rpc.core;
+package cn.zenliu.java.rs.rpc.core.context;
 
 import cn.zenliu.java.rs.rpc.api.Result;
+import cn.zenliu.java.rs.rpc.core.element.UniqueList;
 import org.jetbrains.annotations.Nullable;
 import reactor.core.publisher.Flux;
 
@@ -13,7 +14,7 @@ import java.util.function.Function;
  * @apiNote
  * @since 2021-01-23
  */
-interface ContextServices extends Context {
+public interface ContextServices extends Context {
     Map<Class<?>, WeakReference<Object>> getServices();
 
     Map<Class<?>, WeakReference<Object>> getProxies();

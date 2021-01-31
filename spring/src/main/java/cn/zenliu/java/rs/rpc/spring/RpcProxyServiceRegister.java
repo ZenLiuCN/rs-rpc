@@ -4,6 +4,7 @@ import cn.zenliu.java.rs.rpc.api.Config;
 import cn.zenliu.java.rs.rpc.api.Scope;
 import cn.zenliu.java.rs.rpc.core.Rpc;
 import lombok.extern.slf4j.Slf4j;
+import org.jetbrains.annotations.NotNull;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.ListableBeanFactory;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
@@ -40,8 +41,9 @@ public class RpcProxyServiceRegister implements BeanDefinitionRegistryPostProces
     }
 
 
+    @SuppressWarnings("unchecked")
     @Override
-    public void postProcessBeanDefinitionRegistry(BeanDefinitionRegistry registry) throws BeansException {
+    public void postProcessBeanDefinitionRegistry(@NotNull BeanDefinitionRegistry registry) throws BeansException {
         final RsRpcServiceBeanNameProcessor processor = beanNameProcessorSupplier.get();
         for (Class<?> m : importSupplier.get().imported()) {
             registry.registerBeanDefinition(processor.decide(m),
@@ -52,7 +54,7 @@ public class RpcProxyServiceRegister implements BeanDefinitionRegistryPostProces
     }
 
     @Override
-    public void postProcessBeanFactory(ConfigurableListableBeanFactory beanFactory) throws BeansException {
+    public void postProcessBeanFactory(@NotNull ConfigurableListableBeanFactory beanFactory) throws BeansException {
 
     }
 

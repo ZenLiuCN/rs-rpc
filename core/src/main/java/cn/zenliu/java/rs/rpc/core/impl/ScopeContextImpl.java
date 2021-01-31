@@ -1,7 +1,13 @@
-package cn.zenliu.java.rs.rpc.core;
+package cn.zenliu.java.rs.rpc.core.impl;
 
 import cn.zenliu.java.mimic.api.MimicApi;
 import cn.zenliu.java.rs.rpc.api.Result;
+import cn.zenliu.java.rs.rpc.core.context.Context;
+import cn.zenliu.java.rs.rpc.core.context.ContextScope;
+import cn.zenliu.java.rs.rpc.core.context.ContextServers;
+import cn.zenliu.java.rs.rpc.core.context.ContextServices;
+import cn.zenliu.java.rs.rpc.core.element.Remote;
+import cn.zenliu.java.rs.rpc.core.element.UniqueList;
 import lombok.Getter;
 import mimic.ConcurrentReferenceHashMap;
 import org.jetbrains.annotations.Nullable;
@@ -33,7 +39,7 @@ import java.util.function.Supplier;
  * @apiNote
  * @since 2021-01-20
  */
-abstract class ScopeContextImpl implements ContextScope, ContextServers, ContextServices {
+public abstract class ScopeContextImpl implements ContextScope, ContextServers, ContextServices {
     protected static final Logger log = org.slf4j.LoggerFactory.getLogger("cn.zenliu.java.rs.rpc.core.ScopeContext");
 
     /**
@@ -210,7 +216,7 @@ abstract class ScopeContextImpl implements ContextScope, ContextServers, Context
         });
         servers.clear();
         remotes.forEach((k, v) -> {
-            if (!v.socket.isDisposed()) v.socket.dispose();
+            if (!v.getSocket().isDisposed()) v.getSocket().dispose();
         });
         remotes.clear();
         remoteNames.clear();

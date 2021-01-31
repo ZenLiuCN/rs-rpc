@@ -1,7 +1,7 @@
 package cn.zenliu.java.rs.rpc.rpc;
 
 
-import cn.zenliu.java.rs.rpc.core.Proto;
+import cn.zenliu.java.rs.rpc.core.proto.Proto;
 import io.netty.buffer.ByteBufUtil;
 import io.netty.buffer.Unpooled;
 import mimic.Mimic;

@@ -3,6 +3,7 @@ package cn.zenliu.java.rs.rpc.core;
 import cn.zenliu.java.mimic.api.MimicApi;
 import cn.zenliu.java.rs.rpc.api.JvmUnique;
 import cn.zenliu.java.rs.rpc.api.Scope;
+import cn.zenliu.java.rs.rpc.core.impl.ScopeImpl;
 import mimic.MimicUtil;
 import mimic.Proxy;
 import org.jetbrains.annotations.NotNull;

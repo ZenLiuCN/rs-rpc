@@ -1,4 +1,4 @@
-package cn.zenliu.java.rs.rpc.core;
+package cn.zenliu.java.rs.rpc.core.context;
 
 import org.jetbrains.annotations.Nullable;
 
@@ -14,7 +14,7 @@ import java.util.function.Supplier;
  * @apiNote
  * @since 2021-01-23
  */
-interface Context {
+public interface Context {
     AtomicBoolean getDebug();
 
     AtomicBoolean getTrace();

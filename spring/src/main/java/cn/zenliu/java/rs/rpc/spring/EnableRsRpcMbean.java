@@ -1,8 +1,8 @@
 package cn.zenliu.java.rs.rpc.spring;
 
-import cn.zenliu.java.rs.rpc.core.Remote;
 import cn.zenliu.java.rs.rpc.core.Rpc;
-import cn.zenliu.java.rs.rpc.core.ScopeImpl;
+import cn.zenliu.java.rs.rpc.core.element.Remote;
+import cn.zenliu.java.rs.rpc.core.impl.ScopeImpl;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jooq.lambda.Seq;

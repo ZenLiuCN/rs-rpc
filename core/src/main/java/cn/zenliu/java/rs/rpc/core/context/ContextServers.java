@@ -1,4 +1,4 @@
-package cn.zenliu.java.rs.rpc.core;
+package cn.zenliu.java.rs.rpc.core.context;
 
 import reactor.core.Disposable;
 
@@ -9,7 +9,7 @@ import java.util.Map;
  * @apiNote
  * @since 2021-01-23
  */
-interface ContextServers extends Context {
+public interface ContextServers extends Context {
 
     Map<String, Disposable> getServers();
 

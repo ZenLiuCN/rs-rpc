@@ -1,6 +1,8 @@
-package cn.zenliu.java.rs.rpc.core;
+package cn.zenliu.java.rs.rpc.core.util;
 
 import cn.zenliu.java.rs.rpc.api.Result;
+import cn.zenliu.java.rs.rpc.core.context.ContextScope;
+import cn.zenliu.java.rs.rpc.core.context.ContextServices;
 import lombok.SneakyThrows;
 import org.jetbrains.annotations.Nullable;
 import org.jooq.lambda.Seq;
@@ -15,7 +17,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 
 
-interface ProxyUtil {
+public interface ProxyUtil {
     char DOMAIN_SPLITTER = '#';
     char PARAMETER_DOMAIN_SPLITTER = '<';
     char PARAMETER_SPLITTER = ',';

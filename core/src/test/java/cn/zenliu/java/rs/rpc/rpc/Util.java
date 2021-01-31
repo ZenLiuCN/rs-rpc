@@ -1,7 +1,7 @@
 package cn.zenliu.java.rs.rpc.rpc;
 
 import cn.zenliu.java.rs.rpc.api.Scope;
-import cn.zenliu.java.rs.rpc.core.ScopeImpl;
+import cn.zenliu.java.rs.rpc.core.impl.ScopeImpl;
 import org.slf4j.Logger;
 
 /**

@@ -1,4 +1,4 @@
-package cn.zenliu.java.rs.rpc.core;
+package cn.zenliu.java.rs.rpc.core.proto;
 
 import io.netty.buffer.ByteBufUtil;
 import io.netty.buffer.Unpooled;
@@ -22,8 +22,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import java.util.regex.Pattern;
 
-import static cn.zenliu.java.rs.rpc.core.Proto.internal.STRATEGY;
-import static cn.zenliu.java.rs.rpc.core.Proto.internal.staticMapping;
+import static cn.zenliu.java.rs.rpc.core.proto.Proto.internal.STRATEGY;
+import static cn.zenliu.java.rs.rpc.core.proto.Proto.internal.staticMapping;
 
 
 public interface Proto {
