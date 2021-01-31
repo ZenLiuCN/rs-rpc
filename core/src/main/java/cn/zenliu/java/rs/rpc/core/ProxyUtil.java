@@ -2,16 +2,16 @@ package cn.zenliu.java.rs.rpc.core;
 
 import cn.zenliu.java.rs.rpc.api.Result;
 import lombok.SneakyThrows;
-import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jooq.lambda.Seq;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.BiConsumer;
 import java.util.function.Function;
 
 
@@ -32,9 +32,7 @@ interface ProxyUtil {
     Object[] DEFAULT = new Object[0];
 
     static ClientCreator clientCreatorBuilder(
-        ContextServices ctx,
-        doAndForget fire,
-        doForResponse request
+        ContextScope ctx
     ) {
         return (clientKlass, argumentProcessor, useFNF) -> {
             Object instance = ctx.validateProxy(clientKlass);
@@ -55,27 +53,38 @@ interface ProxyUtil {
                     if (m.getReturnType() == Void.TYPE) {
                         handle = useFNF
                             ? (processor == null ? args -> {
-                            fire.fnf(signature, args).subscribe();
+                            ctx.routeingFNF(signature, args).subscribe();
                             return null;
                         } : args -> {
-                            fire.fnf(signature, processor.apply(args)).subscribe();
+                            ctx.routeingFNF(signature, processor.apply(args)).subscribe();
                             return null;
                         }) : (processor == null ? args -> {
-                            request.rr(signature, args).block(ctx.getTimeout().get());
+                            ctx.routeingRR(signature, args).block(ctx.getTimeout().get());
                             return null;
                         } : args -> {
-                            request.rr(signature, processor.apply(args)).block(ctx.getTimeout().get());
+                            ctx.routeingRR(signature, processor.apply(args)).block(ctx.getTimeout().get());
                             return null;
                         });
                     } else if (Result.class.isAssignableFrom(m.getReturnType())) {
-                        handle = processor == null ? args -> request.rr(signature, args).block(ctx.getTimeout().get())
-                            : args -> request.rr(signature, processor.apply(args)).block(ctx.getTimeout().get());
+                        handle = processor == null ? args -> ctx.routeingRR(signature, args).block(ctx.getTimeout().get())
+                            : args -> ctx.routeingRR(signature, processor.apply(args)).block(ctx.getTimeout().get());
                     } else if (Mono.class.isAssignableFrom(m.getReturnType())) {
-                        handle = processor == null ? args -> request.rr(signature, args)
-                            : args -> request.rr(signature, processor.apply(args));
+                        handle = processor == null ? args -> ctx.routeingRR(signature, args).flatMap(x -> {
+                            if (x.hasError()) return Mono.error(x.getError());
+                            else if (!x.hasResult()) return Mono.empty();
+                            else return Mono.just(x.getResult());
+                        })
+                            : args -> ctx.routeingRR(signature, processor.apply(args)).flatMap(x -> {
+                            if (x.hasError()) return Mono.error(x.getError());
+                            else if (!x.hasResult()) return Mono.empty();
+                            else return Mono.just(x.getResult());
+                        });
+                    } else if (Flux.class.isAssignableFrom(m.getReturnType())) {
+                        handle = processor == null ? args -> Objects.requireNonNull(ctx.routeingRS(signature, args), "request response got null result")
+                            : args -> Objects.requireNonNull(ctx.routeingRS(signature, processor.apply(args)), "request response got null result");
                     } else {
-                        handle = processor == null ? args -> request.rr(signature, args).block(ctx.getTimeout().get()).getOrThrow()
-                            : args -> request.rr(signature, processor.apply(args)).block(ctx.getTimeout().get()).getOrThrow();
+                        handle = processor == null ? args -> Objects.requireNonNull(ctx.routeingRR(signature, args).block(ctx.getTimeout().get()), "request response got null result").getOrThrow()
+                            : args -> Objects.requireNonNull(ctx.routeingRR(signature, processor.apply(args)).block(ctx.getTimeout().get()), "request response got null result").getOrThrow();
                     }
                     cache.put(idx, handle);
                 }
@@ -93,8 +102,7 @@ interface ProxyUtil {
 
     @SuppressWarnings("unchecked")
     static ServiceRegister serviceRegisterBuilder(
-        ContextServices ctx,
-        BiConsumer<String, Function<Object[], Result<Object>>> handlerAdder
+        ContextServices ctx
     ) {
         return (service, serviceKlass, resultProcessor) -> {
             final String canonicalName = serviceKlass.getCanonicalName();
@@ -102,36 +110,38 @@ interface ProxyUtil {
                 throw new IllegalStateException("service is already registered!" + canonicalName + ";");
             }
             for (Method method : serviceKlass.getMethods()) {
-                final Function<Object[], Result<Object>> invoker;
+                Function<Object[], Result<Object>> invoker = null;
+                Function<Object[], Flux<Object>> invokerFlux = null;
                 if (resultProcessor != null && resultProcessor.containsKey(method.getName())) {
                     final Function<Object, Object> processor = resultProcessor.get(method.getName());
                     if (Result.class.isAssignableFrom(method.getReturnType())) {
                         invoker = args -> (Result<Object>) processor.apply(sneakyInvoker(service, method, args));
+                    } else if (Flux.class.isAssignableFrom(method.getReturnType())) {
+                        invokerFlux = args -> (Flux<Object>) processor.apply(sneakyInvoker(service, method, args));
+                    } else if (Mono.class.isAssignableFrom(method.getReturnType())) {
+                        invoker = args -> Result.wrap(() -> ((Mono<Object>) processor.apply(sneakyInvoker(service, method, args))).block(ctx.getTimeout().get()));
                     } else {
                         invoker = args -> Result.wrap(() -> processor.apply(sneakyInvoker(service, method, args)));
                     }
                 } else {
                     if (Result.class.isAssignableFrom(method.getReturnType())) {
                         invoker = args -> (Result<Object>) sneakyInvoker(service, method, args);
+                    } else if (Flux.class.isAssignableFrom(method.getReturnType())) {
+                        invokerFlux = args -> (Flux<Object>) sneakyInvoker(service, method, args);
+                    } else if (Mono.class.isAssignableFrom(method.getReturnType())) {
+                        invoker = args -> Result.wrap(() -> ((Mono<Object>) sneakyInvoker(service, method, args)).block(ctx.getTimeout().get()));
                     } else {
                         invoker = args -> Result.wrap(() -> sneakyInvoker(service, method, args));
                     }
                 }
-                handlerAdder.accept(signature(method, serviceKlass), invoker);
+                if (invoker != null) {
+                    ctx.addHandler(signature(method, serviceKlass), invoker);
+                } else {
+                    ctx.addStreamHandler(signature(method, serviceKlass), invokerFlux);
+                }
             }
         };
 
-    }
-
-
-    @FunctionalInterface
-    interface doAndForget {
-        Mono<Void> fnf(String domain, Object[] args);
-    }
-
-    @FunctionalInterface
-    interface doForResponse {
-        Mono<@NotNull Result<Object>> rr(String domain, Object[] args);
     }
 
 

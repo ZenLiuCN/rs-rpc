@@ -2,6 +2,7 @@ package cn.zenliu.java.rs.rpc.core;
 
 import cn.zenliu.java.rs.rpc.api.Result;
 import org.jetbrains.annotations.Nullable;
+import reactor.core.publisher.Flux;
 
 import java.lang.ref.WeakReference;
 import java.util.*;
@@ -19,6 +20,8 @@ interface ContextServices extends Context {
 
     Map<Integer, Function<Object[], Result<Object>>> getHandlers();
 
+    Map<Integer, Function<Object[], Flux<Object>>> getStreamHandlers();
+
     UniqueList getSigns();
 
     default int prepareHandlerSign(String sign) {
@@ -26,11 +29,19 @@ interface ContextServices extends Context {
     }
 
     default void addHandler(String sign, Function<Object[], Result<Object>> handler) {
-        onDebug("before register handler: \nsign: {},\nregistry: {}{} => {}", sign, getSigns(), getHandlers(), getServices());
+        onDebug("before register handler: \nsign: {},\nregistry: {}{} => {}", () -> new Object[]{sign, getSigns(), getHandlers(), getServices()});
         final int index = prepareHandlerSign(sign);
         if (index == -1) throw new IllegalStateException("a handler '" + sign + "' already exists! ");
         getHandlers().put(index, handler);
-        onDebug("after register handler: \nsign: {}\nregistry: {}{} => {}", sign, getSigns(), getHandlers(), getServices());
+        onDebug("after register handler: \nsign: {}\nregistry: {}{} => {}", () -> new Object[]{sign, getSigns(), getHandlers(), getServices()});
+    }
+
+    default void addStreamHandler(String sign, Function<Object[], Flux<Object>> handler) {
+        onDebug("before register handler: \nsign: {},\nregistry: {}{} => {}", () -> new Object[]{sign, getSigns(), getStreamHandlers(), getServices()});
+        final int index = prepareHandlerSign(sign);
+        if (index == -1) throw new IllegalStateException("a handler '" + sign + "' already exists! ");
+        getStreamHandlers().put(index, handler);
+        onDebug("after register handler: \nsign: {}\nregistry: {}{} => {}", () -> new Object[]{sign, getSigns(), getStreamHandlers(), getServices()});
     }
 
     default boolean addService(Class<?> clazz, Object service) {
@@ -84,5 +95,11 @@ interface ContextServices extends Context {
         final int index = getSigns().indexOf(sign);
         if (index == -1) return null;
         return getHandlers().get(index);
+    }
+
+    default @Nullable Function<Object[], Flux<Object>> findStreamHandler(String sign) {
+        final int index = getSigns().indexOf(sign);
+        if (index == -1) return null;
+        return getStreamHandlers().get(index);
     }
 }

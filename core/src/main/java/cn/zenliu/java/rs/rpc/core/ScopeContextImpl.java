@@ -173,6 +173,7 @@ abstract class ScopeContextImpl implements ContextScope, ContextServers, Context
      * local registered handler
      */
     @Getter final Map<Integer, Function<Object[], Result<Object>>> handlers = new ConcurrentSkipListMap<>();
+    @Getter final Map<Integer, Function<Object[], Flux<Object>>> streamHandlers = new ConcurrentSkipListMap<>();
     @Getter final UniqueList signs = UniqueList.of(new CopyOnWriteArrayList<>());
 
 

@@ -13,6 +13,7 @@ import lombok.Builder;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.Unmodifiable;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.util.retry.Retry;
 
@@ -39,8 +40,8 @@ import static cn.zenliu.java.rs.rpc.core.ProxyUtil.serviceRegisterBuilder;
 public final class ScopeImpl extends ScopeContextImpl implements Scope, Serializable {
     private static final long serialVersionUID = -7734615300814212060L;
 
-    transient final ClientCreator clientCreator = clientCreatorBuilder(this, this::routeingFNF, this::routeingRR);
-    transient final ServiceRegister serviceRegister = serviceRegisterBuilder(this, this::addHandler);
+    transient final ClientCreator clientCreator = clientCreatorBuilder(this);
+    transient final ServiceRegister serviceRegister = serviceRegisterBuilder(this);
 
 
     @Builder
@@ -211,6 +212,12 @@ public final class ScopeImpl extends ScopeContextImpl implements Scope, Serializ
         public @NotNull Mono<Payload> requestResponse(@NotNull Payload payload) {
             onDebug("{} on RequestResponse {}", server, dump(remoteRef.get(), payload));
             return FunctorPayload.rrHandler(payload, remoteRef.get(), ScopeImpl.this::onRR);
+        }
+
+        @Override
+        public @NotNull Flux<Payload> requestStream(@NotNull Payload payload) {
+            onDebug("{} on RequestStream {}", server, dump(remoteRef.get(), payload));
+            return FunctorPayload.rsHandler(payload, remoteRef.get(), ScopeImpl.this::onRS);
         }
 
         @Override

@@ -5,6 +5,7 @@ import io.rsocket.Payload;
 import org.jetbrains.annotations.NotNull;
 import org.jooq.lambda.tuple.Tuple;
 import org.jooq.lambda.tuple.Tuple2;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.util.function.BiFunction;
@@ -81,5 +82,9 @@ public interface FunctorPayload {
         return Mono.just(p)
             .map(FunctorPayload::justMeta)
             .flatMap(x -> rrHandler.apply(x, r));
+    }
+
+    static Flux<Payload> rsHandler(Payload p, Remote r, BiFunction<Tuple2<Meta, Payload>, Remote, Flux<Payload>> rsHandler) {
+        return rsHandler.apply(justMeta(p), r);
     }
 }
