@@ -118,7 +118,7 @@ public interface MimicLambdaUtil {
             final Tuple3<Boolean, Class<?>, Method> m = cache.get(arg.getClass());
             final Method method = m.v3;
 
-            return tuple(method.getParameterCount() == 0,
+            return tuple(method.getParameterCount() != 0, //if accept something that is not a locally lambda
                 x -> {
                     if (method.getParameterCount() > 0 && (x == null || x.length != method.getParameterCount()))
                         throw new IllegalArgumentException("argument length not match");

@@ -18,18 +18,18 @@ import static org.jooq.lambda.tuple.Tuple.tuple;
  * @apiNote
  * @since 2021-01-24
  */
-abstract class BaseDelegator<T> extends AbstractDelegator<T> {
+abstract class BaseMimic<T> extends AbstractMimic<T> {
     private static final long serialVersionUID = -6499438977960561127L;
     protected final ConcurrentHashMap<String, Object> values;
     final static ConcurrentMap<String, Tuple2<Integer, String>> memo = buildSoftConcurrentCache();
 
-    protected BaseDelegator(Class<T> type, ConcurrentHashMap<String, Object> values) {
+    protected BaseMimic(Class<T> type, ConcurrentHashMap<String, Object> values) {
         super(type);
         this.values = values;
     }
 
     @Override
-    public BaseDelegator<T> set(String field, Object value) {
+    public BaseMimic<T> set(String field, Object value) {
         if (field == null || field.isEmpty()) throw new IllegalArgumentException("field should never be null or empty");
         if (!Character.isUpperCase(field.charAt(0)))
             throw new IllegalArgumentException("field should be Pascal Case (first char also upper cased)");

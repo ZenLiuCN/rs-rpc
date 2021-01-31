@@ -9,7 +9,7 @@
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
-    <artifactId>mimic</artifactId>
+    <artifactId>mimicDeep</artifactId>
 
     <dependencies>
         <dependency>

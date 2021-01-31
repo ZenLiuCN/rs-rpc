@@ -14,7 +14,7 @@
     <dependencies>
         <dependency>
             <groupId>cn.zenliu.java</groupId>
-            <artifactId>mimic</artifactId>
+            <artifactId>mimicDeep</artifactId>
             <version>${project.version}</version>
         </dependency>
     </dependencies>

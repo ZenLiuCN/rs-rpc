@@ -9,9 +9,9 @@ import io.protostuff.runtime.DefaultIdStrategy;
 import io.protostuff.runtime.Delegate;
 import io.protostuff.runtime.IdStrategy;
 import io.protostuff.runtime.RuntimeSchema;
-import mimic.Delegator;
 import mimic.Mimic;
-import mimic.Proxy;
+import mimic.MimicDeep;
+import mimic.MimicLight;
 import org.jooq.lambda.Sneaky;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -94,7 +94,7 @@ public interface Proto {
     static <T> T from(byte[] data, Class<T> clz) {
         Schema<Object> schema;
         if (clz.isInterface()) {
-            schema = internal.getSchema(Mimic.class);
+            schema = internal.getSchema(MimicDeep.class);
         } else {
             schema = internal.getSchema(clz);
         }
@@ -107,13 +107,13 @@ public interface Proto {
             if (log.isDebugEnabled()) {
                 log.error("error to decode message of {} \n{}", schema.typeClass(), ByteBufUtil.prettyHexDump(Unpooled.copiedBuffer(data)), e);
             }
-            schema = internal.getSchema(Proxy.class);
+            schema = internal.getSchema(MimicLight.class);
             if (schema == null) throw new IllegalStateException("not found schema for type: " + clz);
             o = schema.newMessage();
             ProtostuffIOUtil.mergeFrom(data, o, schema);
         }
-        if (o instanceof Delegator) {
-            return (T) ((Delegator) o).disguise();
+        if (o instanceof Mimic) {
+            return (T) ((Mimic) o).disguise();
         }
         return (T) o;
     }

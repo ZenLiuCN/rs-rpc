@@ -8,7 +8,7 @@
         <module>api</module>
         <module>core</module>
         <module>spring</module>
-        <module>mimic</module>
+        <module>mimicDeep</module>
     </modules>
 
     <properties>

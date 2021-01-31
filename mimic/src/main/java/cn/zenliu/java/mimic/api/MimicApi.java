@@ -46,7 +46,7 @@ public interface MimicApi {
      * @param <T>      type
      */
     static <T> T proxy(T instance, Class<T> type) {
-        return Proxy.of(type, instance);
+        return MimicLight.of(type, instance);
     }
 
     /**
@@ -56,7 +56,7 @@ public interface MimicApi {
      * @param <T>      type
      */
     static <T> T proxy(T instance) {
-        return Proxy.of(instance);
+        return MimicLight.of(instance);
     }
 
     /**
@@ -65,7 +65,7 @@ public interface MimicApi {
      * @param type the interface type
      */
     static <T> T proxy(Class<T> type) {
-        return Proxy.of(type, (Map<String, Object>) null);
+        return MimicLight.of(type, (Map<String, Object>) null);
     }
 
     /**
@@ -73,8 +73,8 @@ public interface MimicApi {
      *
      * @param type the interface type
      */
-    static <T> Proxy<T> proxyOf(Class<T> type) {
-        return Proxy.from(type);
+    static <T> MimicLight<T> proxyOf(Class<T> type) {
+        return MimicLight.from(type);
     }
 
     /**
@@ -82,8 +82,8 @@ public interface MimicApi {
      *
      * @param type the interface type
      */
-    static <T> Proxy<T> proxyOf(T instance, Class<T> type) {
-        return Proxy.from(type, instance);
+    static <T> MimicLight<T> proxyOf(T instance, Class<T> type) {
+        return MimicLight.from(type, instance);
     }
 
     /**
@@ -114,9 +114,9 @@ public interface MimicApi {
      * @param instance instance
      * @return not Delegator will return null
      */
-    static @Nullable Delegator<?> reveal(Object instance) {
-        final Object o = Delegator.tryRemoveProxy(instance);
-        if (o instanceof Delegator) return (Delegator<?>) o;
+    static @Nullable Mimic<?> reveal(Object instance) {
+        final Object o = Mimic.tryRemoveProxy(instance);
+        if (o instanceof Mimic) return (Mimic<?>) o;
         return null;
     }
 

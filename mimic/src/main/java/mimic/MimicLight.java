@@ -23,14 +23,14 @@ import static org.jooq.lambda.tuple.Tuple.tuple;
  * @apiNote Delegator
  * @since 2021-01-12
  */
-public final class Proxy<T> extends BaseDelegator<T> {
+public final class MimicLight<T> extends BaseMimic<T> {
     private static final long serialVersionUID = 5639462926823838734L;
 
-    Proxy(Class<T> type) {
+    MimicLight(Class<T> type) {
         super(type, new ConcurrentHashMap<>());
     }
 
-    Proxy(Class<T> type, Map<String, Object> values) {
+    MimicLight(Class<T> type, Map<String, Object> values) {
         super(type, values == null ? new ConcurrentHashMap<>() : new ConcurrentHashMap<>(values));
     }
 
@@ -39,7 +39,7 @@ public final class Proxy<T> extends BaseDelegator<T> {
         return getter(field);
     }
 
-    public Proxy<T> set(String field, Object value) {
+    public MimicLight<T> set(String field, Object value) {
         validateField(field);
         setter(field, value);
         return this;
@@ -56,13 +56,13 @@ public final class Proxy<T> extends BaseDelegator<T> {
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
-        if (!(o instanceof Proxy)) {
-            final Object o1 = Delegator.tryRemoveProxy(o);
-            if (!(o1 instanceof Proxy)) return false;
+        if (!(o instanceof MimicLight)) {
+            final Object o1 = Mimic.tryRemoveProxy(o);
+            if (!(o1 instanceof MimicLight)) return false;
             return equals(o1);
         }
-        Proxy<?> proxy = (Proxy<?>) o;
-        return type.equals(proxy.type) && values.equals(proxy.values);
+        MimicLight<?> mimicLight = (MimicLight<?>) o;
+        return type.equals(mimicLight.type) && values.equals(mimicLight.values);
     }
 
     @Override
@@ -95,7 +95,7 @@ public final class Proxy<T> extends BaseDelegator<T> {
      */
 
     public static <T> T of(Class<T> clz, Map<String, Object> init) {
-        return new Proxy<>(clz, init).disguise();
+        return new MimicLight<>(clz, init).disguise();
     }
 
     /**
@@ -107,15 +107,15 @@ public final class Proxy<T> extends BaseDelegator<T> {
      * @return Proxy Instance
      */
     public static <T> T of(Class<T> clz, T instance) {
-        return new Proxy<>(clz, copy(instance, clz)).disguise();
+        return new MimicLight<>(clz, copy(instance, clz)).disguise();
     }
 
-    public static <T> Proxy<T> from(Class<T> clz, T instance) {
-        return new Proxy<>(clz, copy(instance, clz));
+    public static <T> MimicLight<T> from(Class<T> clz, T instance) {
+        return new MimicLight<>(clz, copy(instance, clz));
     }
 
-    public static <T> Proxy<T> from(Class<T> clz) {
-        return new Proxy<>(clz, null);
+    public static <T> MimicLight<T> from(Class<T> clz) {
+        return new MimicLight<>(clz, null);
     }
 
     /**
@@ -123,7 +123,7 @@ public final class Proxy<T> extends BaseDelegator<T> {
      *
      * @param instance target Instance
      * @param face     interface of Instance
-     * @return data, which use for {@link Proxy#of}
+     * @return data, which use for {@link MimicLight#of}
      */
     public static Map<String, Object> copy(Object instance, Class<?> face) {
         if (copier.containsKey(face)) {

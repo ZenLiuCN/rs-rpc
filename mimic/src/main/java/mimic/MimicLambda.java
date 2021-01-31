@@ -1,7 +1,6 @@
 package mimic;
 
 import lombok.Getter;
-import lombok.Setter;
 
 import java.lang.reflect.Method;
 import java.util.Objects;
@@ -11,18 +10,27 @@ import java.util.Objects;
  * @apiNote
  * @since 2021-01-31
  */
-public class Lambda<T> extends AbstractDelegator<T> {
+public class MimicLambda<T> extends AbstractMimic<T> {
     @Getter final Object value;
     @Getter final String methodName;
-    @Getter @Setter private transient Invokable invoker;
+    @Getter private transient Invokable invoker;
 
-    Lambda(Class<T> function, Invokable invoker, String methodName, boolean remote) {
+    MimicLambda(Class<T> function, Invokable invoker, String methodName, boolean remote) {
         super(function);
         this.value = remote ? null : invoker.invokeWith();
         this.methodName = methodName;
         this.invoker = invoker;
     }
 
+    public boolean isSupplier() {
+        return value != null;
+    }
+
+    public MimicLambda<T> setInvoker(Invokable invoker) {
+        if (value != null) throw new IllegalStateException("set invoker of a Supplier not allowed");
+        this.invoker = invoker;
+        return this;
+    }
 
     @Override
     public Object get(String field) {
@@ -30,13 +38,13 @@ public class Lambda<T> extends AbstractDelegator<T> {
     }
 
     @Override
-    public Delegator<T> set(String field, Object value) {
+    public Mimic<T> set(String field, Object value) {
         throw new UnsupportedOperationException("this is a lambda delegator");
     }
 
     @Override
     public String dump() {
-        return type + "$$Lambda$" + methodName + "{supply:" + value + "}";
+        return type + "$$Lambda$Mimic$" + methodName + "{supply:" + value + "}";
     }
 
     @Override

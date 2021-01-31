@@ -4,7 +4,7 @@
 
 1. communicate base on RSocket (current use version 1.1.0)
 2. serialization use protostuff
-3. use JDK proxy to easy wrap interfaces to RPC remote.
+3. use JDK mimicLight to easy wrap interfaces to RPC remote.
 
 ## core ability
 

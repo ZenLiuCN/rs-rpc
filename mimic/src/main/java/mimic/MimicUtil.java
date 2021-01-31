@@ -75,7 +75,7 @@ public interface MimicUtil {
     }
 
     /**
-     * convert a Instance into a {@link Mimic} as Type
+     * convert a Instance into a {@link MimicDeep} as Type
      *
      * @param instance the instance (not null)
      * @param type     the target type
@@ -83,13 +83,13 @@ public interface MimicUtil {
      * @return a Mimic
      */
     @SuppressWarnings("unchecked")
-    static <T> Mimic<T> mimic(@NotNull Object instance, @NotNull Class<T> type) {
+    static <T> MimicDeep<T> mimic(@NotNull Object instance, @NotNull Class<T> type) {
         //use cache if possible
         if (delegator.containsKey(type)) {
-            return (Mimic<T>) delegator.get(type).apply(instance);
+            return (MimicDeep<T>) delegator.get(type).apply(instance);
         }
         final List<Method> methods = getterMethods(type);
-        Function<Object, Mimic<?>> delegateBuilder = x -> {
+        Function<Object, MimicDeep<?>> delegateBuilder = x -> {
             final ConcurrentHashMap<String, Object> values = new ConcurrentHashMap<>();
             final ConcurrentHashMap<String, MimicType> typeMap = new ConcurrentHashMap<>();
             for (Method method : methods) {
@@ -108,10 +108,10 @@ public interface MimicUtil {
                 }
                 values.put(field, value);
             }
-            return new Mimic<>(type, values, typeMap);
+            return new MimicDeep<>(type, values, typeMap);
         };
         delegator.put(type, delegateBuilder);
-        return (Mimic<T>) delegateBuilder.apply(instance);
+        return (MimicDeep<T>) delegateBuilder.apply(instance);
     }
 
     /**
@@ -149,17 +149,17 @@ public interface MimicUtil {
 
     /**
      * convert a instance into Maybe Mimic.<br>
-     * a {@link Mimic} will keep remains.<br>
+     * a {@link MimicDeep} will keep remains.<br>
      * a null will transform into a {@link NULL}.<br>
-     * a {@link Proxy} will be treated as who him play as.<br>
+     * a {@link MimicLight} will be treated as who him play as.<br>
      *
      * @param instance original instance
      * @return Maybe a Mimic
      */
     static Object autoMimic(Object instance) {
         if (instance == null) return NULL.Null;
-        if (instance instanceof Mimic) return instance;
-        if (instance instanceof Lambda) return instance;
+        if (instance instanceof MimicDeep) return instance;
+        if (instance instanceof MimicLambda) return instance;
         if (staticMapping.containsKey(instance.getClass())) {
             return staticMapping.get(instance.getClass()).apply(instance);
         } else if (!predicateMapping.isEmpty()) {
@@ -167,14 +167,14 @@ public interface MimicUtil {
                 if (next.test(instance)) return predicateMapping.get(next).apply(instance);
             }
         }
-        final Object proxy = Delegator.tryRemoveProxy(instance);
-        if (proxy instanceof Mimic) return proxy;
-        if (proxy instanceof Lambda) return proxy;
+        final Object proxy = Mimic.tryRemoveProxy(instance);
+        if (proxy instanceof MimicDeep) return proxy;
+        if (proxy instanceof MimicLambda) return proxy;
         final boolean isLambda = MimicLambdaUtil.isLambda(instance);
         if (isLambda) {
             final Tuple4<Boolean, Invokable, Class<?>, String> objects = MimicLambdaUtil.prepareLambda(instance);
             if (objects == null) throw new IllegalStateException("found a lambda is not a valid lambda!");
-            return new Lambda<>(objects.v3, objects.v2, objects.v4, objects.v1);
+            return new MimicLambda<>(objects.v3, objects.v2, objects.v4, objects.v1);
         }
         final Class<?> aClass = instance.getClass();
         if (aClass.isPrimitive() || aClass.isEnum()) return instance;
@@ -189,16 +189,16 @@ public interface MimicUtil {
 
     /**
      * restore a Maybe Mimic to original form.<br>
-     * a {@link Mimic} will keep remains.<br>
+     * a {@link MimicDeep} will keep remains.<br>
      * a null will transform into a {@link NULL}.<br>
-     * a {@link Proxy} will be treated as who him play as.<br>
+     * a {@link MimicLight} will be treated as who him play as.<br>
      *
      * @param instance the instance Maybe Mimic
      * @return original form of instance
      */
     static Object autoDisguise(Object instance) {
         if (instance instanceof NULL) return null;
-        if (instance instanceof Delegator) {
+        if (instance instanceof Mimic) {
             return ((Mimic<?>) instance).disguise();
         }
         final Object o = containerProcess(instance, true, MimicUtil::autoDisguise);

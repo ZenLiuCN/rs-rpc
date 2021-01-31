@@ -17,7 +17,7 @@ import static mimic.ReflectUtil.accessible;
  * @apiNote
  * @since 2021-01-24
  */
-abstract class AbstractDelegator<T> implements Delegator<T>, InvocationHandler {
+abstract class AbstractMimic<T> implements Mimic<T>, InvocationHandler {
 
     /**
      * Delegate target type
@@ -26,7 +26,7 @@ abstract class AbstractDelegator<T> implements Delegator<T>, InvocationHandler {
     protected transient Object[] result;
     protected transient Constructor<MethodHandles.Lookup> constructor;
 
-    protected AbstractDelegator(Class<T> type) {
+    protected AbstractMimic(Class<T> type) {
         this.type = type;
     }
 

@@ -4,9 +4,9 @@ package cn.zenliu.java.rs.rpc.rpc;
 import cn.zenliu.java.rs.rpc.core.proto.Proto;
 import io.netty.buffer.ByteBufUtil;
 import io.netty.buffer.Unpooled;
-import mimic.Mimic;
+import mimic.MimicDeep;
+import mimic.MimicLight;
 import mimic.MimicUtil;
-import mimic.Proxy;
 import org.jooq.lambda.Seq;
 import org.jooq.lambda.tuple.Tuple2;
 
@@ -73,7 +73,7 @@ public class DelegatorTest {
     }
 
     static void generate() {
-        final Dictionary d = Proxy.of(Dictionary.class, Seq.of(
+        final Dictionary d = MimicLight.of(Dictionary.class, Seq.of(
             tuple("Id", 123L),
             tuple("SystemIdentity", 123L),
             tuple("Name", "A"),
@@ -83,7 +83,7 @@ public class DelegatorTest {
             tuple("NumericKey", false),
             tuple("ValueClass", String.class)
         ).toMap(Tuple2::v1, Tuple2::v2));
-        final Dictionary d2 = Proxy.of(Dictionary.class, Seq.of(
+        final Dictionary d2 = MimicLight.of(Dictionary.class, Seq.of(
             tuple("Id", 124L),
             tuple("SystemIdentity", 123L),
             tuple("Name", "A"),
@@ -93,7 +93,7 @@ public class DelegatorTest {
             tuple("NumericKey", false),
             tuple("ValueClass", String.class),
             tuple("Items", Arrays.asList(
-                Proxy.of(Item.class, Seq.of(
+                MimicLight.of(Item.class, Seq.of(
                     tuple("Id", 123L),
                     tuple("Name", "A"),
                     tuple("Disc", "A")
@@ -104,7 +104,7 @@ public class DelegatorTest {
         System.out.println(Base64.getEncoder().encodeToString(bytes1));
         final Dictionary from1 = Proto.from(bytes1, Dictionary.class);
         System.out.println(from1);
-        final Mimic<Dictionary> mm = MimicUtil.mimic(d2, Dictionary.class);
+        final MimicDeep<Dictionary> mm = MimicUtil.mimic(d2, Dictionary.class);
         System.out.println(mm);
         final byte[] bytes = Proto.to(mm.disguise());
         System.out.println(ByteBufUtil.prettyHexDump(Unpooled.copiedBuffer(bytes)));

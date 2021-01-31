@@ -4,8 +4,8 @@ import cn.zenliu.java.mimic.api.MimicApi;
 import cn.zenliu.java.rs.rpc.api.JvmUnique;
 import cn.zenliu.java.rs.rpc.api.Scope;
 import cn.zenliu.java.rs.rpc.core.impl.ScopeImpl;
+import mimic.MimicLight;
 import mimic.MimicUtil;
-import mimic.Proxy;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.Map;
@@ -103,7 +103,7 @@ public interface Rpc {
      * @return Proxy with data from Instance
      */
     static <T> T delegate(T instance, Class<T> noneNestedInterface) {
-        return Proxy.of(noneNestedInterface, instance);
+        return MimicLight.of(noneNestedInterface, instance);
     }
 
     /**
@@ -115,7 +115,7 @@ public interface Rpc {
      * @return proxy with data from values
      */
     static <T> T delegate(Class<T> noneNestedInterface, Map<String, Object> values) {
-        return Proxy.of(noneNestedInterface, values);
+        return MimicLight.of(noneNestedInterface, values);
     }
 
     /**
@@ -125,7 +125,7 @@ public interface Rpc {
      * @return Proxy with data from instance
      */
     static <T> T delegate(T noneNestedInterfaceObject) {
-        return Proxy.of(noneNestedInterfaceObject);
+        return MimicLight.of(noneNestedInterfaceObject);
     }
 
     /**

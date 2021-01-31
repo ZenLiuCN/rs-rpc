@@ -26,7 +26,7 @@ final class internal {
         return new ConcurrentReferenceHashMap<>(ConcurrentReferenceHashMap.ReferenceType.STRONG, ConcurrentReferenceHashMap.ReferenceType.SOFT);
     }
 
-    static final Map<Class<?>, Function<Object, Mimic<?>>> delegator = buildSoftConcurrentCache();
+    static final Map<Class<?>, Function<Object, MimicDeep<?>>> delegator = buildSoftConcurrentCache();
     static final AtomicReference<Predicate<String>> interfaceNamePredicate = new AtomicReference<>(x -> true);
     static final List<Predicate<String>> commonInterfacePackagePredicate = Arrays.asList(
         x -> x.startsWith("java."),
