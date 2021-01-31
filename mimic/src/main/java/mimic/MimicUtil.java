@@ -3,6 +3,7 @@ package mimic;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jooq.lambda.tuple.Tuple2;
+import org.jooq.lambda.tuple.Tuple4;
 
 import java.lang.reflect.Method;
 import java.util.List;
@@ -11,7 +12,7 @@ import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
-import static mimic.Lambda.findFirstReverse;
+import static mimic.LambdaUtil.findFirstReverse;
 import static mimic.MimicType.mimicTypes;
 import static mimic.ReflectUtil.*;
 import static mimic.internal.*;
@@ -158,6 +159,7 @@ public interface MimicUtil {
     static Object autoMimic(Object instance) {
         if (instance == null) return NULL.Null;
         if (instance instanceof Mimic) return instance;
+        if (instance instanceof Lambda) return instance;
         if (staticMapping.containsKey(instance.getClass())) {
             return staticMapping.get(instance.getClass()).apply(instance);
         } else if (!predicateMapping.isEmpty()) {
@@ -167,6 +169,13 @@ public interface MimicUtil {
         }
         final Object proxy = Delegator.tryRemoveProxy(instance);
         if (proxy instanceof Mimic) return proxy;
+        if (proxy instanceof Lambda) return proxy;
+        final boolean isLambda = MimicLambdaUtil.isLambda(instance);
+        if (isLambda) {
+            final Tuple4<Boolean, Invokable, Class<?>, String> objects = MimicLambdaUtil.prepareLambda(instance);
+            if (objects == null) throw new IllegalStateException("found a lambda is not a valid lambda!");
+            return new Lambda<>(objects.v3, objects.v2, objects.v4, objects.v1);
+        }
         final Class<?> aClass = instance.getClass();
         if (aClass.isPrimitive() || aClass.isEnum()) return instance;
         else {

@@ -5,7 +5,7 @@ import org.jetbrains.annotations.Nullable;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 
-import static mimic.Lambda.findFirst;
+import static mimic.LambdaUtil.findFirst;
 import static mimic.MimicType.mimicTypes;
 
 /**

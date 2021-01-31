@@ -12,7 +12,7 @@ import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
-import static mimic.Lambda.*;
+import static mimic.LambdaUtil.*;
 import static org.jooq.lambda.tuple.Tuple.tuple;
 
 /**

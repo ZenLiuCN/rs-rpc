@@ -6,7 +6,7 @@ import java.util.*;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
-import static mimic.Lambda.*;
+import static mimic.LambdaUtil.*;
 import static mimic.MimicUtil.findInterface;
 import static mimic.internal.isCommonInterface;
 

@@ -2,14 +2,15 @@ package mimic;
 
 import cn.zenliu.java.mimic.api.MimicApi;
 import org.jetbrains.annotations.Nullable;
-import org.jooq.lambda.tuple.Tuple2;
+import org.jooq.lambda.tuple.Tuple3;
+import org.jooq.lambda.tuple.Tuple4;
 
 import java.lang.reflect.Method;
 import java.util.Map;
 import java.util.function.*;
 
-import static mimic.MimicLambda.internal.jvmWrapLambda;
-import static mimic.MimicLambda.internal.reflectWrapLambda;
+import static mimic.MimicLambdaUtil.internal.jvmWrapLambda;
+import static mimic.MimicLambdaUtil.internal.reflectWrapLambda;
 import static org.jooq.lambda.tuple.Tuple.tuple;
 
 /**
@@ -17,21 +18,33 @@ import static org.jooq.lambda.tuple.Tuple.tuple;
  * @apiNote
  * @since 2021-01-31
  */
-public interface MimicLambda {
-    static @Nullable Tuple2<
+public interface MimicLambdaUtil {
+    static @Nullable Tuple4<
         Boolean,//call remote if false ,should call locally (such as Supplier)
-        Invokable> prepareLambda(Object arg) {
+        Invokable,
+        Class<?>,//the functional interface
+        String//the method Name
+        > prepareLambda(Object arg) {
         if (arg == null || !isLambda(arg)) return null;
-        final Tuple2<Boolean, Invokable> tuple = jvmWrapLambda(arg);
+        final Tuple4<Boolean, Invokable, Class<?>, String> tuple = jvmWrapLambda(arg);
         return tuple == null ? reflectWrapLambda(arg) : tuple;
     }
+
 
     static boolean isLambda(Object arg) {
         return arg.getClass().toString().contains("$$Lambda$");
     }
 
     final class internal {
-        static Map<Class<?>, Tuple2<Boolean, Method>> cache = MimicApi.buildSoftConcurrentCache();
+        static Map<Class<?>, Tuple3<Boolean, Class<?>, Method>> cache = MimicApi.buildSoftConcurrentCache();
+
+        static Class<?> findFunctionalInterface(Class<?> some) {
+            final Class<?>[] interfaces = some.getInterfaces();
+            for (Class<?> anInterface : interfaces) {
+                if (anInterface.getAnnotation(FunctionalInterface.class) != null) return anInterface;
+            }
+            return null;
+        }
 
         static boolean isJavaLambda(Object arg) {
             if (arg instanceof BiConsumer) return true;
@@ -86,37 +99,45 @@ public interface MimicLambda {
                 final Method[] declaredMethods = arg.getClass().getDeclaredMethods();
                 final boolean isLambda = declaredMethods.length == 1 || (declaredMethods.length == 2 && declaredMethods[1].getName().equals("writeReplace"));
                 if (isLambda) {
-                    cache.put(arg.getClass(), tuple(true, declaredMethods[0]));
+                    cache.put(arg.getClass(), tuple(true, findFunctionalInterface(arg.getClass()), declaredMethods[0]));
                 } else {
-                    cache.put(arg.getClass(), tuple(false, null));
+                    cache.put(arg.getClass(), tuple(false, null, null));
                 }
                 return isLambda;
             }
         }
 
-        static Tuple2<
+        static Tuple4<
             Boolean,//call remote if false ,should call locally (such as Supplier)
-            Invokable> reflectWrapLambda(Object arg) {
+            Invokable,
+            Class<?>,//the functional interface
+            String//the method Name
+            > reflectWrapLambda(Object arg) {
             final boolean b = isReflectLambda(arg);
             if (!b) return null;
-            final Tuple2<Boolean, Method> m = cache.get(arg.getClass());
-            final Method method = m.v2;
+            final Tuple3<Boolean, Class<?>, Method> m = cache.get(arg.getClass());
+            final Method method = m.v3;
 
-            return tuple(method.getParameterCount() == 0, x -> {
-                if (method.getParameterCount() > 0 && (x == null || x.length != method.getParameterCount()))
-                    throw new IllegalArgumentException("argument length not match");
-                try {
-                    return method.invoke(arg, x);
-                } catch (Throwable e) {
-                    throw new RuntimeException(e);
-                }
-            });
+            return tuple(method.getParameterCount() == 0,
+                x -> {
+                    if (method.getParameterCount() > 0 && (x == null || x.length != method.getParameterCount()))
+                        throw new IllegalArgumentException("argument length not match");
+                    try {
+                        return method.invoke(arg, x);
+                    } catch (Throwable e) {
+                        throw new RuntimeException(e);
+                    }
+                },
+                m.v2, m.v3.getName());
         }
 
         @SuppressWarnings("unchecked")
-        static Tuple2<
+        static Tuple4<
             Boolean,//call remote if false ,should call locally (such as Supplier)
-            Invokable> wrapLambda(int length, Object invoke) {
+            Invokable,
+            Class<?>,//the functional interface
+            String//the method Name
+            > wrapLambda(int length, Object invoke, Class<?> cls, String name) {
             if (invoke instanceof Function) {
                 final Function<Object[], Object> inv = (Function<Object[], Object>) invoke;
                 return tuple(true, args -> {
@@ -124,7 +145,7 @@ public interface MimicLambda {
                         throw new IllegalArgumentException("argument length not match !");
                     }
                     return inv.apply(args);
-                });
+                }, cls, name);
             }
             if (invoke instanceof Predicate) {
                 final Predicate<Object[]> inv = (Predicate<Object[]>) invoke;
@@ -133,11 +154,11 @@ public interface MimicLambda {
                         throw new IllegalArgumentException("argument length not match !");
                     }
                     return inv.test(args);
-                });
+                }, cls, name);
             }
             if (invoke instanceof Supplier) {
                 final Supplier<Object> inv = (Supplier<Object>) invoke;
-                return tuple(false, args -> inv.get());
+                return tuple(false, args -> inv.get(), cls, name);
             }
             if (invoke instanceof Consumer) {
                 final Consumer<Object[]> inv = (Consumer<Object[]>) invoke;
@@ -147,57 +168,62 @@ public interface MimicLambda {
                     }
                     inv.accept(args);
                     return null;
-                });
+                }, cls, name);
             }
             return null;
         }
 
         @SuppressWarnings("unchecked")
-        static Tuple2<Boolean, Invokable> jvmWrapLambda(Object argument) {
+        static Tuple4<
+            Boolean,//call remote if false ,should call locally (such as Supplier)
+            Invokable,
+            Class<?>,//the functional interface
+            String//the method Name
+            > jvmWrapLambda(Object argument) {
             //@formatter:off
-            if(argument instanceof BinaryOperator) return wrapLambda(2,wrapBinaryOperator((BinaryOperator<Object>) argument));
-            if(argument instanceof BiConsumer) return wrapLambda(2,wrapBiConsumer((BiConsumer<Object, Object>) argument));
-            if(argument instanceof BiFunction) return wrapLambda(2,wrapBiFunction((BiFunction<Object, Object, Object>) argument));
-            if(argument instanceof BiPredicate) return wrapLambda(2,wrapBiPredicate((BiPredicate<Object, Object>) argument));
-            if(argument instanceof BooleanSupplier) return wrapLambda(0,wrapBooleanSupplier((BooleanSupplier) argument));
-            if(argument instanceof Consumer) return wrapLambda(1,wrapConsumer((Consumer<Object>) argument));
-            if(argument instanceof DoubleBinaryOperator) return wrapLambda(2,wrapDoubleBinaryOperator((DoubleBinaryOperator) argument));
-            if(argument instanceof DoubleConsumer) return wrapLambda(1,wrapDoubleConsumer((DoubleConsumer) argument));
-            if(argument instanceof DoubleFunction) return wrapLambda(2,wrapDoubleFunction((DoubleFunction<Object>) argument));
-            if(argument instanceof DoublePredicate) return wrapLambda(1,wrapDoublePredicate((DoublePredicate) argument));
-            if(argument instanceof DoubleSupplier) return wrapLambda(0,wrapDoubleSupplier((DoubleSupplier) argument));
-            if(argument instanceof DoubleToIntFunction) return wrapLambda(1,wrapDoubleToIntFunction((DoubleToIntFunction) argument));
-            if(argument instanceof DoubleToLongFunction) return wrapLambda(1,wrapDoubleToLongFunction((DoubleToLongFunction) argument));
-            if(argument instanceof DoubleUnaryOperator) return wrapLambda(1,wrapDoubleUnaryOperator((DoubleUnaryOperator) argument));
-            if(argument instanceof UnaryOperator) return wrapLambda(1,wrapUnaryOperator((UnaryOperator<Object>) argument));
-            if(argument instanceof Function) return wrapLambda(1,wrapFunction((Function<Object, Object>) argument));
-            if(argument instanceof IntBinaryOperator) return wrapLambda(2,wrapIntBinaryOperator((IntBinaryOperator) argument));
-            if(argument instanceof IntConsumer) return wrapLambda(1,wrapIntConsumer((IntConsumer) argument));
-            if(argument instanceof IntFunction) return wrapLambda(1,wrapIntFunction((IntFunction<Object>) argument));
-            if(argument instanceof IntPredicate) return wrapLambda(1,wrapIntPredicate((IntPredicate) argument));
-            if(argument instanceof IntSupplier) return wrapLambda(0,wrapIntSupplier((IntSupplier) argument));
-            if(argument instanceof IntToDoubleFunction) return wrapLambda(1,wrapIntToDoubleFunction((IntToDoubleFunction) argument));
-            if(argument instanceof IntToLongFunction) return wrapLambda(1,wrapIntToLongFunction((IntToLongFunction) argument));
-            if(argument instanceof IntUnaryOperator) return wrapLambda(1,wrapIntUnaryOperator((IntUnaryOperator) argument));
-            if(argument instanceof LongBinaryOperator) return wrapLambda(2,wrapLongBinaryOperator((LongBinaryOperator) argument));
-            if(argument instanceof LongConsumer) return wrapLambda(1,wrapLongConsumer((LongConsumer) argument));
-            if(argument instanceof LongFunction) return wrapLambda(1,wrapLongFunction((LongFunction<Object>) argument));
-            if(argument instanceof LongPredicate) return wrapLambda(1,wrapLongPredicate((LongPredicate) argument));
-            if(argument instanceof LongSupplier) return wrapLambda(0,wrapLongSupplier((LongSupplier) argument));
-            if(argument instanceof LongToDoubleFunction) return wrapLambda(1,wrapLongToDoubleFunction((LongToDoubleFunction) argument));
-            if(argument instanceof LongToIntFunction) return wrapLambda(1,wrapLongToIntFunction((LongToIntFunction) argument));
-            if(argument instanceof LongUnaryOperator) return wrapLambda(1,wrapLongUnaryOperator((LongUnaryOperator) argument));
-            if(argument instanceof ObjDoubleConsumer) return wrapLambda(2,wrapObjDoubleConsumer((ObjDoubleConsumer<Object>) argument));
-            if(argument instanceof ObjIntConsumer) return wrapLambda(2,wrapObjIntConsumer((ObjIntConsumer<Object>) argument));
-            if(argument instanceof ObjLongConsumer) return wrapLambda(2,wrapObjLongConsumer((ObjLongConsumer<Object>) argument));
-            if(argument instanceof Predicate) return wrapLambda(1,wrapPredicate((Predicate<Object>) argument));
-            if(argument instanceof Supplier) return wrapLambda(0,wrapSupplier((Supplier<Object>) argument));
-            if(argument instanceof ToDoubleBiFunction) return wrapLambda(2,wrapToDoubleBiFunction((ToDoubleBiFunction<Object, Object>) argument));
-            if(argument instanceof ToDoubleFunction) return wrapLambda(1,wrapToDoubleFunction((ToDoubleFunction<Object>) argument));
-            if(argument instanceof ToIntBiFunction) return wrapLambda(2,wrapToIntBiFunction((ToIntBiFunction<Object, Object>) argument));
-            if(argument instanceof ToIntFunction) return wrapLambda(1,wrapToIntFunction((ToIntFunction<Object>) argument));
-            if(argument instanceof ToLongBiFunction) return wrapLambda(2,wrapToLongBiFunction((ToLongBiFunction<Object, Object>) argument));
-            if(argument instanceof ToLongFunction) return wrapLambda(1,wrapToLongFunction((ToLongFunction<Object>) argument));
+            if(argument instanceof BinaryOperator) return wrapLambda(2,wrapBinaryOperator((BinaryOperator<Object>) argument),BinaryOperator.class,"apply");
+            if(argument instanceof BiConsumer) return wrapLambda(2,wrapBiConsumer((BiConsumer<Object, Object>) argument),BiConsumer.class,"accept");
+            if(argument instanceof BiFunction) return wrapLambda(2,wrapBiFunction((BiFunction<Object, Object, Object>) argument),BiFunction.class,"apply");
+            if(argument instanceof BiPredicate) return wrapLambda(2,wrapBiPredicate((BiPredicate<Object, Object>) argument),BiPredicate.class,"test");
+            if(argument instanceof BooleanSupplier) return wrapLambda(0,wrapBooleanSupplier((BooleanSupplier) argument),BooleanSupplier.class,"getAsBoolean");
+            if(argument instanceof Consumer) return wrapLambda(1,wrapConsumer((Consumer<Object>) argument),Consumer.class,"accept");
+            if(argument instanceof DoubleBinaryOperator) return wrapLambda(2,wrapDoubleBinaryOperator((DoubleBinaryOperator) argument),DoubleBinaryOperator.class,"applyAsDouble");
+            if(argument instanceof DoubleConsumer) return wrapLambda(1,wrapDoubleConsumer((DoubleConsumer) argument),DoubleConsumer.class,"accept");
+            if(argument instanceof DoubleFunction) return wrapLambda(2,wrapDoubleFunction((DoubleFunction<Object>) argument),DoubleFunction.class,"apply");
+            if(argument instanceof DoublePredicate) return wrapLambda(1,wrapDoublePredicate((DoublePredicate) argument),DoublePredicate.class,"test");
+            if(argument instanceof DoubleSupplier) return wrapLambda(0,wrapDoubleSupplier((DoubleSupplier) argument),DoubleSupplier.class,"getAsDouble");
+            if(argument instanceof DoubleToIntFunction) return wrapLambda(1,wrapDoubleToIntFunction((DoubleToIntFunction) argument),DoubleToIntFunction.class,"applyAsInt");
+            if(argument instanceof DoubleToLongFunction) return wrapLambda(1,wrapDoubleToLongFunction((DoubleToLongFunction) argument),DoubleToLongFunction.class,"applyAsLong");
+            if(argument instanceof DoubleUnaryOperator) return wrapLambda(1,wrapDoubleUnaryOperator((DoubleUnaryOperator) argument),DoubleUnaryOperator.class,"applyAsDouble");
+            if(argument instanceof UnaryOperator) return wrapLambda(1,wrapUnaryOperator((UnaryOperator<Object>) argument),UnaryOperator.class,"apply");
+            if(argument instanceof Function) return wrapLambda(1,wrapFunction((Function<Object, Object>) argument),Function.class,"apply");
+            if(argument instanceof IntBinaryOperator) return wrapLambda(2,wrapIntBinaryOperator((IntBinaryOperator) argument),IntBinaryOperator.class,"applyAsInt");
+            if(argument instanceof IntConsumer) return wrapLambda(1,wrapIntConsumer((IntConsumer) argument),IntConsumer.class,"accept");
+            if(argument instanceof IntFunction) return wrapLambda(1,wrapIntFunction((IntFunction<Object>) argument),IntFunction.class,"apply");
+            if(argument instanceof IntPredicate) return wrapLambda(1,wrapIntPredicate((IntPredicate) argument),IntPredicate.class,"test");
+            if(argument instanceof IntSupplier) return wrapLambda(0,wrapIntSupplier((IntSupplier) argument),IntSupplier.class,"getAsInt");
+            if(argument instanceof IntToDoubleFunction) return wrapLambda(1,wrapIntToDoubleFunction((IntToDoubleFunction) argument),IntToDoubleFunction.class,"applyAsDouble");
+            if(argument instanceof IntToLongFunction) return wrapLambda(1,wrapIntToLongFunction((IntToLongFunction) argument),IntToLongFunction.class,"applyAsLong");
+            if(argument instanceof IntUnaryOperator) return wrapLambda(1,wrapIntUnaryOperator((IntUnaryOperator) argument),IntUnaryOperator.class,"applyAsInt");
+            if(argument instanceof LongBinaryOperator) return wrapLambda(2,wrapLongBinaryOperator((LongBinaryOperator) argument),LongBinaryOperator.class,"applyAsLong");
+            if(argument instanceof LongConsumer) return wrapLambda(1,wrapLongConsumer((LongConsumer) argument),LongConsumer.class,"accept");
+            if(argument instanceof LongFunction) return wrapLambda(1,wrapLongFunction((LongFunction<Object>) argument),LongFunction.class,"apply");
+            if(argument instanceof LongPredicate) return wrapLambda(1,wrapLongPredicate((LongPredicate) argument),LongPredicate.class,"test");
+            if(argument instanceof LongSupplier) return wrapLambda(0,wrapLongSupplier((LongSupplier) argument),LongSupplier.class,"getAsLong");
+            if(argument instanceof LongToDoubleFunction) return wrapLambda(1,wrapLongToDoubleFunction((LongToDoubleFunction) argument),LongToDoubleFunction.class,"applyAsDouble");
+            if(argument instanceof LongToIntFunction) return wrapLambda(1,wrapLongToIntFunction((LongToIntFunction) argument),LongToIntFunction.class,"applyAsInt");
+            if(argument instanceof LongUnaryOperator) return wrapLambda(1,wrapLongUnaryOperator((LongUnaryOperator) argument),LongUnaryOperator.class,"applyAsLong");
+            if(argument instanceof ObjDoubleConsumer) return wrapLambda(2,wrapObjDoubleConsumer((ObjDoubleConsumer<Object>) argument),ObjDoubleConsumer.class,"accept");
+            if(argument instanceof ObjIntConsumer) return wrapLambda(2,wrapObjIntConsumer((ObjIntConsumer<Object>) argument),ObjIntConsumer.class,"accept");
+            if(argument instanceof ObjLongConsumer) return wrapLambda(2,wrapObjLongConsumer((ObjLongConsumer<Object>) argument),ObjLongConsumer.class,"accept");
+            if(argument instanceof Predicate) return wrapLambda(1,wrapPredicate((Predicate<Object>) argument),Predicate.class,"test");
+            if(argument instanceof Supplier) return wrapLambda(0,wrapSupplier((Supplier<Object>) argument),Supplier.class,"get");
+            if(argument instanceof ToDoubleBiFunction) return wrapLambda(2,wrapToDoubleBiFunction((ToDoubleBiFunction<Object, Object>) argument),ToDoubleBiFunction.class,"applyAsDouble");
+            if(argument instanceof ToDoubleFunction) return wrapLambda(1,wrapToDoubleFunction((ToDoubleFunction<Object>) argument),ToDoubleFunction.class,"applyAsDouble");
+            if(argument instanceof ToIntBiFunction) return wrapLambda(2,wrapToIntBiFunction((ToIntBiFunction<Object, Object>) argument),ToIntBiFunction.class,"applyAsInt");
+            if(argument instanceof ToIntFunction) return wrapLambda(1,wrapToIntFunction((ToIntFunction<Object>) argument),ToIntFunction.class,"applyAsInt");
+            if(argument instanceof ToLongBiFunction) return wrapLambda(2,wrapToLongBiFunction((ToLongBiFunction<Object, Object>) argument),ToLongBiFunction.class,"applyAsLong");
+            if(argument instanceof ToLongFunction) return wrapLambda(1,wrapToLongFunction((ToLongFunction<Object>) argument),ToLongFunction.class,"applyAsLong");
             //@formatter:on
             return null;
         }
@@ -249,13 +275,4 @@ public interface MimicLambda {
         //@formatter:on
     }
 
-    @FunctionalInterface
-    interface Invokable {
-        Object invoke(Object[] args);
-
-        default Object invokeWith(Object... args) {
-            return invoke(args);
-        }
-
-    }
 }

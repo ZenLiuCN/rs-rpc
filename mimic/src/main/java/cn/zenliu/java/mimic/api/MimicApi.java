@@ -2,7 +2,7 @@ package cn.zenliu.java.mimic.api;
 
 import mimic.*;
 import org.jetbrains.annotations.Nullable;
-import org.jooq.lambda.tuple.Tuple2;
+import org.jooq.lambda.tuple.Tuple4;
 
 import java.util.Map;
 import java.util.function.Predicate;
@@ -134,9 +134,12 @@ public interface MimicApi {
      * @param arg the argument to decide
      * @return null if not a lambda, (remote,invokable)
      */
-    static @Nullable Tuple2<
-        Boolean,
-        MimicLambda.Invokable> prepareLambda(Object arg) {
-        return MimicLambda.prepareLambda(arg);
+    static @Nullable Tuple4<
+        Boolean,//call remote if false ,should call locally (such as Supplier)
+        Invokable,
+        Class<?>,//the functional interface
+        String //the method name
+        > prepareLambda(Object arg) {
+        return MimicLambdaUtil.prepareLambda(arg);
     }
 }

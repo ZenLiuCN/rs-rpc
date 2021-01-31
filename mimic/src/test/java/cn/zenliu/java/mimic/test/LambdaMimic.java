@@ -267,7 +267,7 @@ public interface LambdaMimic {
 
     static void main(String[] args) {
         final BiConsumer<Object, Integer> a = (l, r) -> System.out.println(l + "" + r);
-        final Function3<Long, Integer, String, String> b = (Function3<Long, Integer, String, String> & Serializable) (l, r, s) -> l + "" + r + s;
+        final Function3<Long, Integer, String, String> b = (Serializable & Function3<Long, Integer, String, String>) (l, r, s) -> l + "" + r + s;
         final Integer ai = 1;
         System.out.println("isLambda(ai) = " + isLambda(ai));
         System.out.println("isLambda(ai) = " + isLambda(a));
@@ -275,5 +275,6 @@ public interface LambdaMimic {
         System.out.println("b.getClass() = " + b.getClass());
         System.out.println("b.getClass() = " + a.getClass());
         System.out.println("b.getClass().getDeclaredMethods() = " + Arrays.toString(b.getClass().getDeclaredMethods()));
+        System.out.println("b.getClass() = " + Arrays.toString(b.getClass().getInterfaces()));
     }
 }
