@@ -21,8 +21,11 @@ public class Meta {
      * domain: ServiceClassCanonicalName#Method<MethodArgumentCount>
      */
     final String sign;
-
+    /**
+     * request Scope name
+     */
     final String from;
+    @Builder.Default final boolean callback = false;
     @Builder.Default final long tick = Tick.fromNowUTC();
     @Builder.Default final boolean trace = false;
     @Builder.Default final String uuid = UUID.randomUUID().toString();

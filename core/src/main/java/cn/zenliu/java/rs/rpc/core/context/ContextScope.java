@@ -25,7 +25,7 @@ import static cn.zenliu.java.rs.rpc.core.util.ProxyUtil.domainOf;
  * @apiNote
  * @since 2021-01-23
  */
-public interface ContextScope extends ContextRoutes {
+public interface ContextScope extends ContextCallback {
     String LOG_META = "\n META: {}\n SERVICE: {}";
     String LOG_META_REQUEST = "\n META:{}\n REQUEST: {}\n SERVICE: {}";
 
@@ -80,6 +80,23 @@ public interface ContextScope extends ContextRoutes {
         final Meta meta = in.v1;
         final Payload p = in.v2;
         onDebug("process RequestAndResponse:" + LOG_META, meta, remote);
+        //callback handle
+
+        if (meta.isCallback()) {
+            final String scopeName = meta.getSign().substring(0, meta.getSign().indexOf(CALLBACK_SCOPE));
+            if (scopeName.equals(getName())) {
+                final Request request = mustRequest(p);
+                return Mono.just(doCallback(meta, request, remote));
+            } else {
+                final Remote target = findRemoteByName(scopeName);
+                if (target == null) {
+                    return Mono.just(Response.build(meta, getName(), Result.error(new IllegalStateException("remote has gone!"))));
+                }
+                return target.getSocket().requestResponse(Request.updateMeta(p, meta, meta.isTrace() ? getName() : getNameOnTrace()));
+            }
+        }
+
+
         final Function<Object[], Result<Object>> handler = findHandler(meta.getSign());
         if (handler != null) {
             final Request request = mustRequest(p);
@@ -89,7 +106,7 @@ public interface ContextScope extends ContextRoutes {
                 , x -> {
                     try {
                         final Result<Object> res = handler.apply(request.getArguments());
-                        return Mono.just(Response.build(meta, (getDebug().get() || getTrace().get() || meta.isTrace()) ? getName() : null, res != null ? res : Result.ok(null)));
+                        return Mono.just(Response.build(meta, getName(), res != null ? res : Result.ok(null)));
                     } catch (Exception ex) {
                         x.error("error on process RequestAndResponse:" + LOG_META_REQUEST, meta, request, remote, ex);
                         return Mono.just(Response.build(meta, getName(), Result.error(ex)));
@@ -133,7 +150,7 @@ public interface ContextScope extends ContextRoutes {
                         return handler.apply(request.getArguments()).switchOnFirst((s, f) ->
                             //switch element process first one have a meta
                             s.hasValue() ?
-                                Flux.just(Response.buildFirstElement(meta, (getDebug().get() || getTrace().get() || meta.isTrace()) ? getName() : null, s.get()))
+                                Flux.just(Response.buildFirstElement(meta, meta.isTrace() ? getName() : getNameOnTrace(), s.get()))
                                     .concatWith(f.map(Response::buildElement)) :
                                 f.map(Response::buildElement));
                     } catch (Exception ex) {

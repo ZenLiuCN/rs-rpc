@@ -1,5 +1,6 @@
 package cn.zenliu.java.rs.rpc.core.proto;
 
+import cn.zenliu.java.rs.rpc.api.Tick;
 import cn.zenliu.java.rs.rpc.core.Rpc;
 import io.netty.buffer.ByteBufUtil;
 import io.rsocket.Payload;
@@ -28,11 +29,12 @@ class Request {
     /**
      * timestamp of sending
      */
-    @Builder.Default final long timestamp = System.currentTimeMillis();
+    @Builder.Default final long tick = Tick.fromNowUTC();
     /**
      * arguments must not with Interfaces
      */
     final Object[] arguments;
+
 
     public Object[] getArguments() {
         if (arguments == null || arguments.length == 0) return arguments;
@@ -70,9 +72,18 @@ class Request {
         }
     }
 
+    public static Payload buildCallback(String session, String scope, Object[] arguments, boolean trace) {
+        final Request request = Request.builder()
+            .arguments(proc(arguments))
+            .build();
+        val meta = Meta.builder().sign(session).callback(true).from(scope);
+        if (trace) meta.trace(true);
+        return DefaultPayload.create(Proto.to(request), Proto.to(meta.build()));
+    }
+
     @Override
     public String toString() {
-        return "REQUEST@" + timestamp + '{' + Arrays.toString(arguments) + '}';
+        return "REQUEST@" + tick + '{' + Arrays.toString(arguments) + '}';
     }
 
     static Object[] proc(Object[] arguments) {
