@@ -102,7 +102,7 @@ public final class RequestImpl implements Request {
 
     @Override
     public Payload addTrace(String name) {
-        if (name != null) updateMeta(getMeta().addTrace(name));
+        if (name != null) return updateMeta(getMeta().addTrace(name));
         return payload;
     }
 
