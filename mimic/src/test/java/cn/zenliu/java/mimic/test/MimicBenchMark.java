@@ -11,6 +11,7 @@ import org.openjdk.jmh.runner.options.OptionsBuilder;
 import org.openjdk.jmh.runner.options.TimeValue;
 
 import java.util.concurrent.TimeUnit;
+import java.util.function.BiFunction;
 
 /**
  * Benchmark                  Mode  Cnt   Score   Error  Units
@@ -74,9 +75,8 @@ public class MimicBenchMark {
 
     @Test
     public void allBenchmark() throws Exception {
-        benchRun("", true);
+        benchRun("*", true);
     }
-
 
     @Benchmark
     public void lightMimic(BenchmarkState state, Blackhole bh) {
@@ -123,7 +123,7 @@ public class MimicBenchMark {
         OuterMost outerMostMimic;
         OuterNestMost outerNestMostMimic;
         OuterNestDeepMost outerNestDeepMostMimic;
-
+        BiFunction<Long, Integer, String> b;
         @Setup(Level.Trial)
         public void initialize() {
             outerMost = OuterMost.Outer.builder().id(123).name("123Name").build();
@@ -133,6 +133,7 @@ public class MimicBenchMark {
             outerMostMimic = MimicApi.mimic(outerMost);
             outerNestMostMimic = MimicApi.mimic(outerNestMost);
             outerNestDeepMostMimic = MimicApi.mimic(outerNestDeepMost);
+            b = (l, r) -> l + "" + r;
         }
     }
 }

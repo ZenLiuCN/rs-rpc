@@ -2,6 +2,7 @@ package cn.zenliu.java.mimic.api;
 
 import mimic.*;
 import org.jetbrains.annotations.Nullable;
+import org.jooq.lambda.tuple.Tuple2;
 
 import java.util.Map;
 import java.util.function.Predicate;
@@ -125,5 +126,17 @@ public interface MimicApi {
 
     static <K, V> ConcurrentReferenceHashMap<K, V> buildWeakConcurrentCache() {
         return new ConcurrentReferenceHashMap<>(ConcurrentReferenceHashMap.ReferenceType.STRONG, ConcurrentReferenceHashMap.ReferenceType.WEAK);
+    }
+
+    /**
+     * call remote if true , else should call locally (such as Supplier)
+     *
+     * @param arg the argument to decide
+     * @return null if not a lambda, (remote,invokable)
+     */
+    static @Nullable Tuple2<
+        Boolean,
+        MimicLambda.Invokable> prepareLambda(Object arg) {
+        return MimicLambda.prepareLambda(arg);
     }
 }
