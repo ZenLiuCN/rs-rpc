@@ -3,7 +3,6 @@ package cn.zenliu.java.rs.rpc.core.proto;
 import cn.zenliu.java.rs.rpc.core.Rpc;
 import io.netty.buffer.ByteBufUtil;
 import io.rsocket.Payload;
-import io.rsocket.RSocket;
 import io.rsocket.util.DefaultPayload;
 import lombok.Builder;
 import lombok.Getter;
@@ -34,7 +33,6 @@ class Request {
      * arguments must not with Interfaces
      */
     final Object[] arguments;
-    final Lambda[] lambdas;
 
     public Object[] getArguments() {
         if (arguments == null || arguments.length == 0) return arguments;
@@ -85,18 +83,7 @@ class Request {
         ).toArray();
     }
 
-    @Getter
-    @Builder
-    static class Lambda {
-        final int order;
-        final boolean remote;
-        final Object value; //supplier value
-        final String session; // session to callback
-        final Class<?> interfaces; //the lambda interface
-        transient RSocket socket; //socket to use
-
-
-    }
+//todo MimicLambda process
 
 }
 
