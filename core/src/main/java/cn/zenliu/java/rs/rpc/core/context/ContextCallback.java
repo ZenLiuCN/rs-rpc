@@ -3,7 +3,8 @@ package cn.zenliu.java.rs.rpc.core.context;
 import cn.zenliu.java.rs.rpc.api.Result;
 import cn.zenliu.java.rs.rpc.core.element.Meta;
 import cn.zenliu.java.rs.rpc.core.element.Remote;
-import cn.zenliu.java.rs.rpc.core.proto.Request;
+import cn.zenliu.java.rs.rpc.core.element.Request;
+import cn.zenliu.java.rs.rpc.core.proto.RequestImpl;
 import cn.zenliu.java.rs.rpc.core.proto.Response;
 import io.rsocket.Payload;
 import mimic.Invokable;
@@ -62,7 +63,7 @@ public interface ContextCallback extends ContextRoutes {
             return mimic.disguise();
         }
         mimic.setInvoker(o -> remote.getRSocket()
-            .requestResponse(Request.buildCallback(meta.getFrom() + CALLBACK_SCOPE + request.getTick() + '#' + mimic.getMethodName(),
+            .requestResponse(RequestImpl.buildCallback(meta.getFrom() + CALLBACK_SCOPE + request.getTick() + '#' + mimic.getMethodName(),
                 getName(),
                 o,
                 this::argumentPostProcessor,

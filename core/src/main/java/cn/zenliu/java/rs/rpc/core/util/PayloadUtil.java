@@ -2,6 +2,7 @@ package cn.zenliu.java.rs.rpc.core.util;
 
 import cn.zenliu.java.rs.rpc.core.element.Meta;
 import cn.zenliu.java.rs.rpc.core.element.Remote;
+import cn.zenliu.java.rs.rpc.core.element.Request;
 import cn.zenliu.java.rs.rpc.core.element.RouteMeta;
 import cn.zenliu.java.rs.rpc.core.proto.*;
 import io.netty.buffer.ByteBufUtil;
@@ -50,9 +51,9 @@ public interface PayloadUtil {
         return Tuple.tuple(Proto.from(ByteBufUtil.getBytes(p.sliceMetadata()), MetaImpl.class), p);
     }
 
-    static Request mustRequest(Payload p) {
+    static RequestImpl mustRequest(Payload p) {
         try {
-            return Proto.from(ByteBufUtil.getBytes(p.data()), Request.class);
+            return Proto.from(ByteBufUtil.getBytes(p.data()), RequestImpl.class);
         } finally {
             p.release();
         }
@@ -75,7 +76,7 @@ public interface PayloadUtil {
             });
     }
 
-    static Mono<Void> fnfHandler(Payload p, Remote r, Consumer<Tuple2<@NotNull RouteMeta, @NotNull Remote>> servMetaHandler, BiFunction<Tuple2<Meta, Payload>, Remote, Mono<Void>> fnfHandler) {
+    static Mono<Void> fnfHandler(Payload p, Remote r, Consumer<Tuple2<@NotNull RouteMeta, @NotNull Remote>> servMetaHandler, BiFunction<Request, Remote, Mono<Void>> fnfHandler) {
         if (p.data().capacity() == 0) { // a meta push must without data
             final RouteMeta routeMeta = maybeServMeta(p);
             if (routeMeta != null) {
@@ -84,17 +85,17 @@ public interface PayloadUtil {
             }
         }
         return Mono.just(p)
-            .map(PayloadUtil::justMeta)
+            .map(RequestImpl::of)
             .flatMap(x -> fnfHandler.apply(x, r));
     }
 
-    static Mono<Payload> rrHandler(Payload p, Remote r, BiFunction<Tuple2<Meta, Payload>, Remote, Mono<Payload>> rrHandler) {
+    static Mono<Payload> rrHandler(Payload p, Remote r, BiFunction<Request, Remote, Mono<Payload>> rrHandler) {
         return Mono.just(p)
-            .map(PayloadUtil::justMeta)
+            .map(RequestImpl::of)
             .flatMap(x -> rrHandler.apply(x, r));
     }
 
-    static Flux<Payload> rsHandler(Payload p, Remote r, BiFunction<Tuple2<Meta, Payload>, Remote, Flux<Payload>> rsHandler) {
-        return rsHandler.apply(justMeta(p), r);
+    static Flux<Payload> rsHandler(Payload p, Remote r, BiFunction<Request, Remote, Flux<Payload>> rsHandler) {
+        return rsHandler.apply(RequestImpl.of(p), r);
     }
 }

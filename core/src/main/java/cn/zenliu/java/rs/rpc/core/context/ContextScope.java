@@ -3,8 +3,9 @@ package cn.zenliu.java.rs.rpc.core.context;
 import cn.zenliu.java.rs.rpc.api.Result;
 import cn.zenliu.java.rs.rpc.core.element.Meta;
 import cn.zenliu.java.rs.rpc.core.element.Remote;
+import cn.zenliu.java.rs.rpc.core.element.Request;
 import cn.zenliu.java.rs.rpc.core.element.RouteMeta;
-import cn.zenliu.java.rs.rpc.core.proto.Request;
+import cn.zenliu.java.rs.rpc.core.proto.RequestImpl;
 import cn.zenliu.java.rs.rpc.core.proto.Response;
 import io.rsocket.Payload;
 import org.jetbrains.annotations.NotNull;
@@ -15,7 +16,6 @@ import reactor.core.publisher.Mono;
 
 import java.util.function.Function;
 
-import static cn.zenliu.java.rs.rpc.core.util.PayloadUtil.mustRequest;
 import static cn.zenliu.java.rs.rpc.core.util.ProxyUtil.domainOf;
 
 /**
@@ -26,8 +26,7 @@ import static cn.zenliu.java.rs.rpc.core.util.ProxyUtil.domainOf;
  * @since 2021-01-23
  */
 public interface ContextScope extends ContextCallback {
-    String LOG_META = "\n META: {}\n SERVICE: {}";
-    String LOG_META_REQUEST = "\n META:{}\n REQUEST: {}\n SERVICE: {}";
+    String LOG_META = "\n REQUEST: {}\n SERVICE: {}";
 
 
     default void onServMeta(Tuple2<@NotNull RouteMeta, @NotNull Remote> in) {
@@ -36,36 +35,34 @@ public interface ContextScope extends ContextCallback {
 
     }
 
-    default Mono<Void> onFNF(@NotNull Tuple2<Meta, Payload> in, Remote remote) {
-        final Meta meta = in.v1;
-        onDebug("begin to process FireAndForget:" + LOG_META, meta, remote);
-        final Function<Object[], Result<Object>> handler = findHandler(meta.getAddress());
+    default Mono<Void> onFNF(@NotNull Request r, Remote remote) {
+        onDebug("begin to process FireAndForget:" + LOG_META, r, remote);
+        final Function<Object[], Result<Object>> handler = findHandler(r.getMeta().getAddress());
         if (handler != null) {
-            final Request request = mustRequest(in.v2);
             onDebugWithTimer(
-                x -> x.debug("process FireAndForget:" + LOG_META_REQUEST, meta, request, remote)
+                x -> x.debug("process FireAndForget:" + LOG_META, r, remote)
                 , null
                 , x -> {
                     try {
-                        handler.apply(request.getArguments(this.argumentPreProcessor(remote, meta, request)));
-                        if ((getDebug().get() || getTrace().get()) || meta.isTrace()) {
-                            x.info("remote trace \n META: {} \n TIME COST: {}", meta, meta.costNow());
+                        handler.apply(r.getArguments(this.argumentPreProcessor(remote, r.getMeta(), r)));
+                        if ((getDebug().get() || getTrace().get()) || r.getMeta().isTrace()) {
+                            x.info("remote trace \n META: {} \n TIME COST: {}", r, r.getMeta().costNow());
                         }
                     } catch (Exception e) {
-                        x.error("error to process FireAndForget:" + LOG_META_REQUEST, meta, request, remote, e);
+                        x.error("error to process FireAndForget:" + LOG_META, r, remote, e);
                     }
                 });
             return Mono.empty();
         } else if (isRoute()) {
-            final String domain = domainOf(meta.getAddress());
+            final String domain = domainOf(r.getMeta().getAddress());
             final Remote service = findRemoteService(domain);
             if (service != null) {
-                onDebugElse(x -> x.debug("routeing FireAndForget:" + LOG_META + "\n NEXT:{}", meta, remote, service)
-                    , x -> x.debug("routeing FireAndForget:" + LOG_META + "\n NEXT:{}", meta, remote.getName(), service.getName()));
-                return service.getRSocket().fireAndForget(Request.updateMeta(in.v2, meta, meta.isTrace() ? getName() : getNameOnTrace()));
+                onDebugElse(x -> x.debug("routeing FireAndForget:" + LOG_META + "\n NEXT:{}", r, remote, service)
+                    , x -> x.debug("routeing FireAndForget:" + LOG_META + "\n NEXT:{}", r, remote.getName(), service.getName()));
+                return service.getRSocket().fireAndForget(r.addTrace(r.getMeta().isTrace() ? getName() : getNameOnTrace()));
             }
         }
-        error("none registered FireAndForget:" + LOG_META, meta, remote);
+        error("none registered FireAndForget:" + LOG_META, r, remote);
         return Mono.empty();
     }
 
@@ -76,105 +73,99 @@ public interface ContextScope extends ContextCallback {
      * @param remote remote
      * @return Mono result
      */
-    default Mono<Payload> onRR(Tuple2<Meta, Payload> in, Remote remote) {
-        final Meta meta = in.v1;
-        final Payload p = in.v2;
-        onDebug("process RequestAndResponse:" + LOG_META, meta, remote);
+    default Mono<Payload> onRR(Request r, Remote remote) {
+
+        onDebug("process RequestAndResponse:" + LOG_META, r, remote);
         //callback handle
 
-        if (meta.isCallback()) {
-            final String scopeName = meta.getAddress().substring(0, meta.getAddress().indexOf(CALLBACK_SCOPE));
+        if (r.getMeta().isCallback()) {
+            final String scopeName = r.getMeta().getAddress().substring(0, r.getMeta().getAddress().indexOf(CALLBACK_SCOPE));
             if (scopeName.equals(getName())) {
-                final Request request = mustRequest(p);
-                return Mono.just(doCallback(meta, request, remote));
+                return Mono.just(doCallback(r.getMeta(), r, remote));
             } else {
                 final Remote target = findRemoteByName(scopeName);
                 if (target == null) {
-                    return Mono.just(Response.build(meta, getName(), Result.error(new IllegalStateException("remote has gone!"))));
+                    return Mono.just(Response.build(r.getMeta(), getName(), Result.error(new IllegalStateException("remote has gone!"))));
                 }
-                return target.getRSocket().requestResponse(Request.updateMeta(p, meta, meta.isTrace() ? getName() : getNameOnTrace()));
+                return target.getRSocket().requestResponse(r.addTrace(r.getMeta().isTrace() ? getName() : getNameOnTrace()));
             }
         }
 
 
-        final Function<Object[], Result<Object>> handler = findHandler(meta.getAddress());
+        final Function<Object[], Result<Object>> handler = findHandler(r.getMeta().getAddress());
         if (handler != null) {
-            final Request request = mustRequest(p);
             return onDebugWithTimerReturns(
-                x -> x.debug("process RequestAndResponse:" + LOG_META_REQUEST, meta, request, remote)
+                x -> x.debug("process RequestAndResponse:" + LOG_META, r, remote)
                 , null
                 , x -> {
                     try {
-                        final Result<Object> res = handler.apply(request.getArguments(this.argumentPreProcessor(remote, meta, request)));
-                        return Mono.just(Response.build(meta, getName(), res != null ? res : Result.ok(null)));
+                        final Result<Object> res = handler.apply(r.getArguments(this.argumentPreProcessor(remote, r.getMeta(), r)));
+                        return Mono.just(Response.build(r.getMeta(), getName(), res != null ? res : Result.ok(null)));
                     } catch (Exception ex) {
-                        x.error("error on process RequestAndResponse:" + LOG_META_REQUEST, meta, request, remote, ex);
-                        return Mono.just(Response.build(meta, getName(), Result.error(ex)));
+                        x.error("error on process RequestAndResponse:" + LOG_META, r, remote, ex);
+                        return Mono.just(Response.build(r.getMeta(), getName(), Result.error(ex)));
                     }
                 }
             );
         } else if (isRoute()) {
-            final String domain = domainOf(meta.getAddress());
+            final String domain = domainOf(r.getMeta().getAddress());
             final Remote service = findRemoteService(domain);
             if (service != null) {
-                onDebugElse(x -> x.debug("routeing RequestAndResponse:" + LOG_META + "\n NEXT:{}", meta, remote, service)
-                    , x -> x.debug("routeing RequestAndResponse:" + LOG_META + "\n NEXT:{}", meta, remote.getName(), service.getName()));
+                onDebugElse(x -> x.debug("routeing RequestAndResponse:" + LOG_META + "\n NEXT:{}", r, remote, service)
+                    , x -> x.debug("routeing RequestAndResponse:" + LOG_META + "\n NEXT:{}", r, remote.getName(), service.getName()));
                 try {
-                    return service.getRSocket().requestResponse(Request.updateMeta(p, meta, meta.isTrace() ? getName() : getNameOnTrace()));
+                    return service.getRSocket().requestResponse(r.addTrace(r.getMeta().isTrace() ? getName() : getNameOnTrace()));
                 } catch (Exception ex) {
-                    error(" on process routeing RequestAndResponse:" + LOG_META, meta, remote, ex);
-                    return Mono.just(Response.build(meta, getName(), Result.error(ex)));
+                    error(" on process routeing RequestAndResponse:" + LOG_META, r, remote, ex);
+                    return Mono.just(Response.build(r.getMeta(), getName(), Result.error(ex)));
                 }
             }
         }
-        error("none registered RequestAndResponse:" + LOG_META, meta, remote);
-        return Mono.just(Response.build(meta, getName(), Result.error(new IllegalStateException("no such method '" + meta.getAddress() + "' on " +
+        error("none registered RequestAndResponse:" + LOG_META, r, remote);
+        return Mono.just(Response.build(r.getMeta(), getName(), Result.error(new IllegalStateException("no such method '" + r.getMeta().getAddress() + "' on " +
             getName() + ",I supports " + getRoutes().get() + " with routeing " + isRoute() + (isRoute() ? (" and with routes " + getDomains()) : "")))));
     }
 
     /**
      * handle rs request
      */
-    default Flux<Payload> onRS(Tuple2<Meta, Payload> in, Remote remote) {
-        final Meta meta = in.v1;
-        final Payload p = in.v2;
-        onDebug("process RequestStream:" + LOG_META, meta, remote);
-        final Function<Object[], Flux<Object>> handler = findStreamHandler(meta.getAddress());
+    default Flux<Payload> onRS(Request r, Remote remote) {
+        onDebug("process RequestStream:" + LOG_META, r, remote);
+        final Function<Object[], Flux<Object>> handler = findStreamHandler(r.getMeta().getAddress());
         if (handler != null) {
-            final Request request = mustRequest(p);
             return onDebugWithTimerReturns(
-                x -> x.debug("process RequestStream:" + LOG_META_REQUEST, meta, request, remote)
+                x -> x.debug("process RequestStream:" + LOG_META, r, remote)
                 , null
                 , x -> {
                     try {
-                        return handler.apply(request.getArguments(this.argumentPreProcessor(remote, meta, request))).switchOnFirst((s, f) ->
+                        return handler.apply(r.getArguments(this.argumentPreProcessor(remote, r.getMeta(), r))).switchOnFirst((s, f) ->
                             //switch element process first one have a meta
                             s.hasValue() ?
-                                Flux.just(Response.buildFirstElement(meta, meta.isTrace() ? getName() : getNameOnTrace(), s.get()))
+                                Flux.just(Response.buildFirstElement(r.getMeta(), r.getMeta().isTrace() ? getName() : getNameOnTrace(), s.get()))
                                     .concatWith(f.map(Response::buildElement)) :
                                 f.map(Response::buildElement));
                     } catch (Exception ex) {
-                        x.error("error on process RequestStream:" + LOG_META_REQUEST, meta, request, remote, ex);
+                        x.error("error on process RequestStream:" + LOG_META, r, remote, ex);
                         return Flux.error(ex);
                     }
                 }
             );
         } else if (isRoute()) {
-            final String domain = domainOf(meta.getAddress());
+            final String domain = domainOf(r.getMeta().getAddress());
             final Remote service = findRemoteService(domain);
             if (service != null) {
-                onDebugElse(x -> x.debug("routeing RequestStream:" + LOG_META + "\n NEXT:{}", meta, remote, service)
-                    , x -> x.debug("routeing RequestStream:" + LOG_META + "\n NEXT:{}", meta, remote.getName(), service.getName()));
+                onDebugElse(x -> x.debug("routeing RequestStream:" + LOG_META + "\n NEXT:{}", r, remote, service)
+                    , x -> x.debug("routeing RequestStream:" + LOG_META + "\n NEXT:{}", r, remote.getName(), service.getName()));
                 try {
-                    return service.getRSocket().requestStream(Request.updateMeta(p, meta, meta.isTrace() ? getName() : getNameOnTrace()));
+                    return service.getRSocket().requestStream(r.addTrace(r.getMeta().isTrace() ? getName() : getNameOnTrace()));
                 } catch (Exception ex) {
-                    error(" on process routeing RequestStream:" + LOG_META, meta, remote, ex);
+                    error(" on process routeing RequestStream:" + LOG_META, r, remote, ex);
                     return Flux.error(ex);
                 }
             }
         }
-        error("none registered RequestStream:" + LOG_META, meta, remote);
-        return Flux.error(new IllegalStateException("no such method '" + meta.getAddress() + "' on " +
+        error("none registered RequestStream:" + LOG_META, r, remote);
+        return Flux.error(new IllegalStateException("no such method '" + r.getMeta().getAddress() + "' on " +
             getName() + ",I supports " + getRoutes().get() + " with routeing " + isRoute() + (isRoute() ? (" and with routes " + getDomains()) : "")));
     }
 
@@ -195,7 +186,7 @@ public interface ContextScope extends ContextCallback {
         return onDebugWithTimerReturns(
             x -> x.debug("remote call \n DOMAIN: {} \n ARGUMENTS: {} .", sign, args)
             , null
-            , x -> remote.getRSocket().requestResponse(Request.build(sign, getName(), args, this::argumentPostProcessor, getTrace().get()))
+            , x -> remote.getRSocket().requestResponse(RequestImpl.build(sign, getName(), args, this::argumentPostProcessor, getTrace().get()))
                 .map(result -> {
                     if ((getDebug().get() || getTrace().get()) && result != null) {
                         final Meta meta = Response.parseMeta(result);
@@ -229,7 +220,7 @@ public interface ContextScope extends ContextCallback {
         return onDebugWithTimerReturns(
             x -> x.debug("remote call \n DOMAIN: {} \n ARGUMENTS: {} .", sign, args)
             , null
-            , x -> remote.getRSocket().requestStream(Request.build(sign, getName(), args, this::argumentPostProcessor, getTrace().get()))
+            , x -> remote.getRSocket().requestStream(RequestImpl.build(sign, getName(), args, this::argumentPostProcessor, getTrace().get()))
                 .switchOnFirst((signal, flux) -> {
                     if (signal.hasValue()) {
                         final Payload result = signal.get();
@@ -257,7 +248,7 @@ public interface ContextScope extends ContextCallback {
             throw new IllegalStateException("not exists service for " + sign);
         }
         debug("do FNF with {} ,{} =>{}", sign, args, remote);
-        return remote.getRSocket().fireAndForget(Request.build(sign, getName(), args, this::argumentPostProcessor, getTrace().get()));
+        return remote.getRSocket().fireAndForget(RequestImpl.build(sign, getName(), args, this::argumentPostProcessor, getTrace().get()));
     }
 
 
