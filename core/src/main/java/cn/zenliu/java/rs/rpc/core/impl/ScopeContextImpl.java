@@ -10,6 +10,7 @@ import cn.zenliu.java.rs.rpc.core.element.Remote;
 import cn.zenliu.java.rs.rpc.core.element.UniqueList;
 import lombok.Getter;
 import mimic.ConcurrentReferenceHashMap;
+import mimic.Invokable;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import reactor.core.Disposable;
@@ -187,6 +188,7 @@ public abstract class ScopeContextImpl implements ContextScope, ContextServers, 
      * remotes domain registry
      */
     @Getter final Map<Integer, ConcurrentSkipListSet<Remote>> remoteServices = new ConcurrentSkipListMap<>();
+    @Getter final Map<String, Invokable> callbackPool = new ConcurrentSkipListMap<>();
 
     /**
      * store all Service Domain
@@ -216,7 +218,7 @@ public abstract class ScopeContextImpl implements ContextScope, ContextServers, 
         });
         servers.clear();
         remotes.forEach((k, v) -> {
-            if (!v.getSocket().isDisposed()) v.getSocket().dispose();
+            if (!v.getRSocket().isDisposed()) v.getRSocket().dispose();
         });
         remotes.clear();
         remoteNames.clear();

@@ -1,6 +1,7 @@
 package cn.zenliu.java.rs.rpc.core.proto;
 
 import cn.zenliu.java.rs.rpc.api.Tick;
+import cn.zenliu.java.rs.rpc.core.element.Meta;
 import lombok.Builder;
 import lombok.Getter;
 import org.jetbrains.annotations.NotNull;
@@ -16,11 +17,11 @@ import java.util.UUID;
  */
 @Builder
 @Getter
-public class Meta {
+public class MetaImpl implements Meta {
     /**
      * domain: ServiceClassCanonicalName#Method<MethodArgumentCount>
      */
-    final String sign;
+    final String address;
     /**
      * request Scope name
      */
@@ -34,6 +35,7 @@ public class Meta {
      */
     @Builder.Default final Map<Long, String> link = new HashMap<>();
 
+    @Override
     public Meta addTrace(@NotNull String scope) {
         link.put(Tick.fromNowUTC(), scope);
         return this;
@@ -42,7 +44,7 @@ public class Meta {
     @Override
     public String toString() {
         final StringBuilder builder = new StringBuilder();
-        builder.append("META@").append(sign).append('@').append(uuid).append("{").append(from).append('@').append(Tick.from(tick).getKey()).append(":T:").append(trace).append('}');
+        builder.append("META@").append(address).append('@').append(uuid).append("{").append(from).append('@').append(Tick.from(tick).getKey()).append(":T:").append(trace).append('}');
         if (link != null && !link.isEmpty()) {
             link.forEach((k, v) -> {
                 builder.append('[').append(Tick.from(k).getKey()).append(':').append(v).append(']').append(">");
@@ -52,6 +54,7 @@ public class Meta {
         return builder.toString();
     }
 
+    @Override
     public String cost() {
         if (link == null || link.isEmpty()) {
             return "Nan";
@@ -65,6 +68,7 @@ public class Meta {
         return Tick.between(tick, Math.max(l1, l2)).getNano() / 1000.0 + " μs";
     }
 
+    @Override
     public String costNow() {
         return Tick.betweenNow(tick).getNano() / 1000.0 + " μs";
     }

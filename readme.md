@@ -4,16 +4,16 @@
 
 1. communicate base on RSocket (current use version 1.1.0)
 2. serialization use protostuff
-3. use JDK mimicLight to easy wrap interfaces to RPC remote.
+3. use JDK mimicLight to easy wrap interfaces to RPC remoteImpl.
 
 ## core ability
 
 1. binary transmit with protostuff: smaller and faster.
-2. auto remote register via simple api.
+2. auto remoteImpl register via simple api.
 3. auto routeing is supported.
 4. totally isolation with RSocket Implement, so Maybe it could keep a good & stable API.
 5. a Result object will take any exception from Service to Client side.
-6. a routeing trace is included inside request meta, and will be returned with response.
+6. a routeing trace is included inside request metaImpl, and will be returned with response.
 
 ## notes & limitations
 

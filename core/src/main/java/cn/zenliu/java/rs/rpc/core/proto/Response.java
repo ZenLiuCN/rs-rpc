@@ -3,6 +3,7 @@ package cn.zenliu.java.rs.rpc.core.proto;
 import cn.zenliu.java.rs.rpc.api.Result;
 import cn.zenliu.java.rs.rpc.api.Tick;
 import cn.zenliu.java.rs.rpc.core.Rpc;
+import cn.zenliu.java.rs.rpc.core.element.Meta;
 import io.netty.buffer.ByteBufUtil;
 import io.rsocket.Payload;
 import io.rsocket.util.DefaultPayload;
@@ -54,7 +55,7 @@ final class Response {
     }
 
     public static Meta parseMeta(Payload p) {
-        return Proto.from(ByteBufUtil.getBytes(p.sliceMetadata()), Meta.class);
+        return Proto.from(ByteBufUtil.getBytes(p.sliceMetadata()), MetaImpl.class);
     }
 
     public static Response parse(Payload p) {

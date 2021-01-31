@@ -1,8 +1,8 @@
 package cn.zenliu.java.rs.rpc.core.context;
 
 import cn.zenliu.java.rs.rpc.api.Result;
+import cn.zenliu.java.rs.rpc.core.element.Meta;
 import cn.zenliu.java.rs.rpc.core.element.Remote;
-import cn.zenliu.java.rs.rpc.core.proto.Meta;
 import cn.zenliu.java.rs.rpc.core.proto.Request;
 import cn.zenliu.java.rs.rpc.core.proto.Response;
 import io.rsocket.Payload;
@@ -23,7 +23,7 @@ public interface ContextCallback extends ContextRoutes {
     Map<String, Invokable> getCallbackPool();
 
     default Payload doCallback(Meta meta, Request request, Remote remote) {
-        final Invokable invokable = getCallbackPool().get(meta.getSign());
+        final Invokable invokable = getCallbackPool().get(meta.getAddress());
         if (invokable == null)
             return Response.build(meta, getName(), Result.error(new IllegalStateException("invokable missed")));
         return Response.build(meta, getName(), Result.wrap(() -> invokable.invoke(request.getArguments(this.argumentPreProcessor(remote, meta, request)))));
@@ -36,12 +36,12 @@ public interface ContextCallback extends ContextRoutes {
 
     default Function<Object, Object> argumentPreProcessor(
         Remote remote,
-        Meta requestMeta,
+        Meta meta,
         Request request
     ) {
         return x -> {
             if (x instanceof MimicLambda)
-                return prepareRemoteCallback(remote, requestMeta, request, (MimicLambda<?>) x);
+                return prepareRemoteCallback(remote, meta, request, (MimicLambda<?>) x);
             return x;
         };
     }
@@ -54,15 +54,15 @@ public interface ContextCallback extends ContextRoutes {
     }
 
     default Object prepareRemoteCallback(Remote remote,
-                                         Meta requestMeta,
+                                         Meta meta,
                                          Request request,
                                          MimicLambda<?> mimic) {
         if (mimic.isSupplier()) { //just in case.
             mimic.setInvoker(o -> mimic.getValue());
             return mimic.disguise();
         }
-        mimic.setInvoker(o -> remote.getSocket()
-            .requestResponse(Request.buildCallback(requestMeta.getFrom() + CALLBACK_SCOPE + request.getTick() + '#' + mimic.getMethodName(),
+        mimic.setInvoker(o -> remote.getRSocket()
+            .requestResponse(Request.buildCallback(meta.getFrom() + CALLBACK_SCOPE + request.getTick() + '#' + mimic.getMethodName(),
                 getName(),
                 o,
                 this::argumentPostProcessor,

@@ -3,8 +3,9 @@ package cn.zenliu.java.rs.rpc.core.impl;
 import cn.zenliu.java.rs.rpc.api.Config;
 import cn.zenliu.java.rs.rpc.api.Scope;
 import cn.zenliu.java.rs.rpc.core.element.Remote;
+import cn.zenliu.java.rs.rpc.core.element.Server;
 import cn.zenliu.java.rs.rpc.core.proto.Proto;
-import cn.zenliu.java.rs.rpc.core.util.FunctorPayload;
+import cn.zenliu.java.rs.rpc.core.util.PayloadUtil;
 import cn.zenliu.java.rs.rpc.core.util.ProxyUtil.ClientCreator;
 import cn.zenliu.java.rs.rpc.core.util.ProxyUtil.ServiceRegister;
 import cn.zenliu.java.rs.rpc.core.util.RSocketUtil;
@@ -14,6 +15,7 @@ import io.rsocket.Payload;
 import io.rsocket.RSocket;
 import io.rsocket.util.DefaultPayload;
 import lombok.Builder;
+import lombok.Getter;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.Unmodifiable;
@@ -54,7 +56,7 @@ public final class ScopeImpl extends ScopeContextImpl implements Scope, Serializ
     }
 
     static String dump(Remote remote, Payload payload) {
-        return "\n SERVICE: " + remote.getName() + " | SERVICES:" + remote.getService() + "| WEIGHT:" + remote.getWeight() + "\n" +
+        return "\n REMOTE: " + remote.getName() + " | ROUTES:" + remote.getRoutes() + "| WEIGHT:" + remote.getWeight() + "\n" +
             " META :\n" + ByteBufUtil.prettyHexDump(payload.sliceMetadata()) +
             "\n DATA :\n" + ByteBufUtil.prettyHexDump(payload.sliceData());
     }
@@ -103,16 +105,16 @@ public final class ScopeImpl extends ScopeContextImpl implements Scope, Serializ
 
         final Supplier<Mono<? extends Closeable>> clientSupplier = RSocketUtil
             .buildClient((setup, sending) -> {
-                    final Remote remote = Remote.builder()
-                        .idx(-getRemoteNames().size())
-                        .socket(sending)
+                    final RemoteImpl remoteImpl = RemoteImpl.builder()
+                        .index(-getRemoteNames().size())
+                        .rSocket(sending)
                         .build();
                     if (debug.get()) {
                         log.debug("remote connect to client [{}]", name);
                     }
-                    final ServiceRSocket rSocket = new ServiceRSocket(name, remote, false);
-                    remote.setServer(rSocket);
-                    processRemoteUpdate(remote, null, false);
+                    final ServiceRSocket rSocket = new ServiceRSocket(name, remoteImpl, false);
+                    remoteImpl.setServer(rSocket);
+                    processRemoteUpdate(remoteImpl, null, false);
                     return Mono.just(rSocket);
                 }, resume -> Mono.fromCallable(() -> DefaultPayload.create(Proto.to(resume)))
                 , config);
@@ -143,16 +145,16 @@ public final class ScopeImpl extends ScopeContextImpl implements Scope, Serializ
         final Supplier<Mono<? extends Closeable>> serverSupplier = RSocketUtil.buildServer((setup, sending) -> {
             //current setup from client is support resume or not
             Boolean resume = Proto.from(ByteBufUtil.getBytes(setup.sliceData()), Boolean.class);
-            final Remote remote = Remote.builder()
-                .idx(-getRemoteNames().size())
+            final RemoteImpl remoteImpl = RemoteImpl.builder()
+                .index(-getRemoteNames().size())
                 .name("UNK")
-                .socket(sending)
-                .resume(resume)
+                .rSocket(sending)
+                .resumeEnabled(resume)
                 .build();
             log.debug("remote connect to server [{}]", name);
-            final ServiceRSocket rSocket = new ServiceRSocket(name, remote, true);
-            remote.setServer(rSocket);
-            processRemoteUpdate(remote, null, false);
+            final ServiceRSocket rSocket = new ServiceRSocket(name, remoteImpl, true);
+            remoteImpl.setServer(rSocket);
+            processRemoteUpdate(remoteImpl, null, false);
             return Mono.just(rSocket);
         }, config);
         serverSupplier.get().subscribe(server -> {
@@ -195,44 +197,55 @@ public final class ScopeImpl extends ScopeContextImpl implements Scope, Serializ
     }
 
 
-    public final class ServiceRSocket implements RSocket {
-        public final AtomicReference<Remote> remoteRef = new AtomicReference<>();
-        public final String server;
-        public final boolean serverMode;
+    public final class ServiceRSocket implements Server, RSocket {
+        @Getter final AtomicReference<Remote> ref = new AtomicReference<>();
+        @Getter final String name;
+        @Getter final boolean client;
 
-        ServiceRSocket(String server, Remote remote, boolean mode) {
-            this.server = server;
-            this.serverMode = mode;
-            this.remoteRef.set(remote);
+        @Override
+        public Server setRemote(Remote remote) {
+            ref.set(remote);
+            return this;
+        }
+
+        @Override
+        public Remote getRemote() {
+            return ref.get();
+        }
+
+        ServiceRSocket(String name, Remote remote, boolean client) {
+            this.name = name;
+            this.client = client;
+            this.ref.set(remote);
         }
 
         @Override
         public @NotNull Mono<Void> fireAndForget(@NotNull Payload payload) {
-            onDebug("{} on FireAndForget {} ", server, dump(remoteRef.get(), payload));
-            return FunctorPayload.fnfHandler(payload, remoteRef.get(), ScopeImpl.this::onServMeta, ScopeImpl.this::onFNF);
+            onDebug("{} on FireAndForget {} ", name, ScopeImpl.dump(ref.get(), payload));
+            return PayloadUtil.fnfHandler(payload, ref.get(), ScopeImpl.this::onServMeta, ScopeImpl.this::onFNF);
         }
 
         @Override
         public @NotNull Mono<Payload> requestResponse(@NotNull Payload payload) {
-            onDebug("{} on RequestResponse {}", server, dump(remoteRef.get(), payload));
-            return FunctorPayload.rrHandler(payload, remoteRef.get(), ScopeImpl.this::onRR);
+            onDebug("{} on RequestResponse {}", name, ScopeImpl.dump(ref.get(), payload));
+            return PayloadUtil.rrHandler(payload, ref.get(), ScopeImpl.this::onRR);
         }
 
         @Override
         public @NotNull Flux<Payload> requestStream(@NotNull Payload payload) {
-            onDebug("{} on RequestStream {}", server, dump(remoteRef.get(), payload));
-            return FunctorPayload.rsHandler(payload, remoteRef.get(), ScopeImpl.this::onRS);
+            onDebug("{} on RequestStream {}", name, ScopeImpl.dump(ref.get(), payload));
+            return PayloadUtil.rsHandler(payload, ref.get(), ScopeImpl.this::onRS);
         }
 
         @Override
         public @NotNull Mono<Void> metadataPush(@NotNull Payload payload) {
-            onDebug("{} on MetadataPush {}", server, dump(remoteRef.get(), payload));
-            return FunctorPayload.metaPushHandler(payload, remoteRef.get(), ScopeImpl.this::onServMeta);
+            onDebug("{} on MetadataPush {}", name, ScopeImpl.dump(ref.get(), payload));
+            return PayloadUtil.metaPushHandler(payload, ref.get(), ScopeImpl.this::onServMeta);
         }
 
         public void removeRegistry() {
-            remotes.remove(remoteRef.get().getIdx());
-            remoteServices.forEach((k, v) -> v.remove(remoteRef.get()));
+            remotes.remove(ref.get().getIndex());
+            remoteServices.forEach((k, v) -> v.remove(ref.get()));
         }
 
         @Override
@@ -250,11 +263,16 @@ public final class ScopeImpl extends ScopeContextImpl implements Scope, Serializ
 
         @Override
         public String toString() {
-            return "ServiceRSocket{" +
-                "remote=" + remoteRef.get() +
-                ", serverName='" + server + '\'' +
-                ", server=" + serverMode +
+            return "Server{" +
+                "remote=" + ref.get() +
+                ", name='" + name + '\'' +
+                ", isClient=" + client +
                 '}';
+        }
+
+        @Override
+        public String dump() {
+            return toString();
         }
     }
 

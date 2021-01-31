@@ -1,15 +1,14 @@
 package cn.zenliu.java.rs.rpc.core.proto;
 
+import cn.zenliu.java.rs.rpc.core.element.RouteMeta;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.ToString;
 import org.jetbrains.annotations.Nullable;
 
-import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.HashSet;
+import java.util.Collection;
 import java.util.List;
-import java.util.Set;
 
 /**
  * @author Zen.Liu
@@ -17,21 +16,17 @@ import java.util.Set;
  * @since 2021-01-18
  */
 @Builder
-@Getter
 @ToString
-public class ServMeta implements Serializable {
+public class RouteMetaImpl implements RouteMeta {
     private static final long serialVersionUID = -3906227121661168621L;
-    /**
-     * Remote Name
-     */
-    final String name;
-    /**
-     * Supported Service Domain (Sign without methods)
-     */
-    @Builder.Default final @Nullable List<String> service = new ArrayList<>();
-    @Builder.Default final @Nullable Set<String> known = new HashSet<>();
 
-    public boolean isKnown(Set<String> routes) {
+    @Getter final String name;
+    @Getter final boolean resumeEnabled;
+
+    @Getter @Builder.Default final @Nullable List<String> routes = new ArrayList<>();
+    @Getter @Builder.Default final @Nullable List<String> known = new ArrayList<>();
+
+    public boolean isKnown(Collection<String> routes) {
         return (routes.isEmpty() && (known == null || known.isEmpty()))
             || (known != null) && known.containsAll(routes);
     }

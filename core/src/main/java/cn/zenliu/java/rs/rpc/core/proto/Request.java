@@ -2,6 +2,7 @@ package cn.zenliu.java.rs.rpc.core.proto;
 
 import cn.zenliu.java.rs.rpc.api.Tick;
 import cn.zenliu.java.rs.rpc.core.Rpc;
+import cn.zenliu.java.rs.rpc.core.element.Meta;
 import io.netty.buffer.ByteBufUtil;
 import io.rsocket.Payload;
 import io.rsocket.util.DefaultPayload;
@@ -54,7 +55,7 @@ class Request {
             .tick(tk)
             .arguments(proc(arguments, x -> argumentPostProcessor.apply(x, tk)))
             .build();
-        val meta = Meta.builder().sign(domain).from(scope);
+        val meta = MetaImpl.builder().address(domain).from(scope);
         if (trace) meta.trace(true);
         return DefaultPayload.create(Proto.to(request), Proto.to(meta.build()));
     }
@@ -84,7 +85,7 @@ class Request {
             .tick(tk)
             .arguments(proc(arguments, x -> argumentPostProcessor.apply(x, tk)))
             .build();
-        val meta = Meta.builder().sign(session).callback(true).from(scope);
+        val meta = MetaImpl.builder().address(session).callback(true).from(scope);
         if (trace) meta.trace(true);
         return DefaultPayload.create(Proto.to(request), Proto.to(meta.build()));
     }

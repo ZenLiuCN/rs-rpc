@@ -1,15 +1,19 @@
 package cn.zenliu.java.rs.rpc.core.util;
 
+import cn.zenliu.java.rs.rpc.core.element.Meta;
 import cn.zenliu.java.rs.rpc.core.element.Remote;
+import cn.zenliu.java.rs.rpc.core.element.RouteMeta;
 import cn.zenliu.java.rs.rpc.core.proto.*;
 import io.netty.buffer.ByteBufUtil;
 import io.rsocket.Payload;
+import io.rsocket.util.DefaultPayload;
 import org.jetbrains.annotations.NotNull;
 import org.jooq.lambda.tuple.Tuple;
 import org.jooq.lambda.tuple.Tuple2;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.nio.ByteBuffer;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
 
@@ -18,19 +22,23 @@ import java.util.function.Consumer;
  * @apiNote
  * @since 2021-01-22
  */
-public interface FunctorPayload {
+public interface PayloadUtil {
 
-    static Meta maybeMeta(Payload p) {
+    static MetaImpl maybeMeta(Payload p) {
         if (p.hasMetadata()) {
-            return Proto.from(ByteBufUtil.getBytes(p.sliceMetadata()), Meta.class);
+            return Proto.from(ByteBufUtil.getBytes(p.sliceMetadata()), MetaImpl.class);
         }
         return null;
     }
 
-    static ServMeta maybeServMeta(Payload p) {
+    static Payload buildRouteMeta(RouteMeta meta) {
+        return DefaultPayload.create(DefaultPayload.EMPTY_BUFFER, ByteBuffer.wrap(Proto.to(meta)));
+    }
+
+    static RouteMeta maybeServMeta(Payload p) {
         if (p.hasMetadata()) {
             try {
-                return Proto.from(ByteBufUtil.getBytes(p.sliceMetadata()), ServMeta.class);
+                return Proto.from(ByteBufUtil.getBytes(p.sliceMetadata()), RouteMetaImpl.class);
             } catch (Exception e) {
                 return null;
             }
@@ -39,7 +47,7 @@ public interface FunctorPayload {
     }
 
     static Tuple2<Meta, Payload> justMeta(Payload p) {
-        return Tuple.tuple(Proto.from(ByteBufUtil.getBytes(p.sliceMetadata()), Meta.class), p);
+        return Tuple.tuple(Proto.from(ByteBufUtil.getBytes(p.sliceMetadata()), MetaImpl.class), p);
     }
 
     static Request mustRequest(Payload p) {
@@ -58,31 +66,31 @@ public interface FunctorPayload {
         }
     }
 
-    static Mono<Void> metaPushHandler(Payload p, Remote r, Consumer<Tuple2<ServMeta, Remote>> servMetaHandler) {
+    static Mono<Void> metaPushHandler(Payload p, Remote r, Consumer<Tuple2<RouteMeta, Remote>> servMetaHandler) {
         return Mono.just(p)
-            .map(FunctorPayload::maybeServMeta)//todo
+            .map(PayloadUtil::maybeServMeta)//todo
             .flatMap(x -> {
                 servMetaHandler.accept(Tuple.tuple(x, r));
                 return Mono.empty();
             });
     }
 
-    static Mono<Void> fnfHandler(Payload p, Remote r, Consumer<Tuple2<@NotNull ServMeta, @NotNull Remote>> servMetaHandler, BiFunction<Tuple2<Meta, Payload>, Remote, Mono<Void>> fnfHandler) {
+    static Mono<Void> fnfHandler(Payload p, Remote r, Consumer<Tuple2<@NotNull RouteMeta, @NotNull Remote>> servMetaHandler, BiFunction<Tuple2<Meta, Payload>, Remote, Mono<Void>> fnfHandler) {
         if (p.data().capacity() == 0) { // a meta push must without data
-            final ServMeta servMeta = maybeServMeta(p);
-            if (servMeta != null) {
-                servMetaHandler.accept(Tuple.tuple(servMeta, r));
+            final RouteMeta routeMeta = maybeServMeta(p);
+            if (routeMeta != null) {
+                servMetaHandler.accept(Tuple.tuple(routeMeta, r));
                 return Mono.empty();
             }
         }
         return Mono.just(p)
-            .map(FunctorPayload::justMeta)
+            .map(PayloadUtil::justMeta)
             .flatMap(x -> fnfHandler.apply(x, r));
     }
 
     static Mono<Payload> rrHandler(Payload p, Remote r, BiFunction<Tuple2<Meta, Payload>, Remote, Mono<Payload>> rrHandler) {
         return Mono.just(p)
-            .map(FunctorPayload::justMeta)
+            .map(PayloadUtil::justMeta)
             .flatMap(x -> rrHandler.apply(x, r));
     }
 

@@ -37,31 +37,31 @@ interface ContextRemoteServices extends ContextRemotes {
             onDebug("find no domain {} in {} with routeing", domain + ROUTE_MARK, getDomains());
             return null;
         }
-        final ConcurrentSkipListSet<Remote> remotes = getRemoteServices().get(index);
-        if (remotes.isEmpty()) {
+        final ConcurrentSkipListSet<Remote> remoteImpls = getRemoteServices().get(index);
+        if (remoteImpls.isEmpty()) {
             onDebug("find domain {} in {} with routeing, but found no Remote exists in {}!", domain + ROUTE_MARK, getDomains(), getRemoteServices());
             return null;
         }
-        return remotes.first();
+        return remoteImpls.first();
     }
 
     default boolean updateRemoteService(Remote newRemote, Remote oldRemote) {
         boolean updated = false;
         onDebug("before update remote service: {} to {} \n {} {}", newRemote, oldRemote, getDomains(), getRemoteServices());
         if (oldRemote != null) {
-            oldRemote.getService().forEach(v -> removeOldRemoteService(v, oldRemote));
+            oldRemote.getRoutes().forEach(v -> removeOldRemoteService(v, oldRemote));
         }
         onDebug("after remove old when update remote service: {} to {} \n {} {}", newRemote, oldRemote, getDomains(), getRemoteServices());
-        for (String domain : newRemote.getService()) {
-            onDebug("before register remote {} with service {}", newRemote.getName(), domain);
-            final int index = getOrAddDomain(domain);
-            ConcurrentSkipListSet<Remote> remotes = getRemoteServices().get(index);
-            if (remotes == null) {
+        for (String route : newRemote.getRoutes()) {
+            onDebug("before register remote {} with service {}", newRemote.getName(), route);
+            final int index = getOrAddDomain(route);
+            ConcurrentSkipListSet<Remote> remoteImpls = getRemoteServices().get(index);
+            if (remoteImpls == null) {
                 updated = true;//a new Domain found
-                remotes = new ConcurrentSkipListSet<>(Remote.weightComparator);
-                getRemoteServices().put(index, remotes);
+                remoteImpls = new ConcurrentSkipListSet<>(Remote.weightComparator);
+                getRemoteServices().put(index, remoteImpls);
             }
-            remotes.add(newRemote);
+            remoteImpls.add(newRemote);
         }
         onDebug("after update remote service: \n {} to {} \n {} {} \n domain update status:{}", oldRemote, newRemote, getDomains(), getRemoteServices(), updated);
         return updated;
