@@ -10,6 +10,7 @@ import mimic.Invokable;
 import mimic.MimicLambda;
 
 import java.util.Map;
+import java.util.function.Function;
 
 /**
  * @author Zen.Liu
@@ -25,13 +26,30 @@ public interface ContextCallback extends ContextRoutes {
         final Invokable invokable = getCallbackPool().get(meta.getSign());
         if (invokable == null)
             return Response.build(meta, getName(), Result.error(new IllegalStateException("invokable missed")));
-        return Response.build(meta, getName(), Result.wrap(() -> invokable.invoke(request.getArguments())));
+        return Response.build(meta, getName(), Result.wrap(() -> invokable.invoke(request.getArguments(this.argumentPreProcessor(remote, meta, request)))));
+    }
+
+    default Object argumentPostProcessor(Object arg, Long tick) {
+        if (arg instanceof MimicLambda) return prepareLocalCallback(tick, (MimicLambda<?>) arg);
+        return arg;
+    }
+
+    default Function<Object, Object> argumentPreProcessor(
+        Remote remote,
+        Meta requestMeta,
+        Request request
+    ) {
+        return x -> {
+            if (x instanceof MimicLambda)
+                return prepareRemoteCallback(remote, requestMeta, request, (MimicLambda<?>) x);
+            return x;
+        };
     }
 
     default MimicLambda<?> prepareLocalCallback(
-        Request request,
+        long tick,
         MimicLambda<?> mimic) {
-        getCallbackPool().put(request.getTick() + '#' + mimic.getMethodName(), mimic.getInvoker());
+        getCallbackPool().put(tick + '#' + mimic.getMethodName(), mimic.getInvoker());
         return mimic;
     }
 
@@ -47,9 +65,10 @@ public interface ContextCallback extends ContextRoutes {
             .requestResponse(Request.buildCallback(requestMeta.getFrom() + CALLBACK_SCOPE + request.getTick() + '#' + mimic.getMethodName(),
                 getName(),
                 o,
+                this::argumentPostProcessor,
                 getTrace().get()))
         );
-        return mimic.disguise();
+        return mimic;
     }
 
 }

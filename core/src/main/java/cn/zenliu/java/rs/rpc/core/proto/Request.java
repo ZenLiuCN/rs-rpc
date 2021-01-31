@@ -15,6 +15,8 @@ import org.jooq.lambda.Seq;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.function.BiFunction;
+import java.util.function.Function;
 
 /**
  * Request Container
@@ -24,29 +26,33 @@ import java.util.Arrays;
  * @since 2021-01-12
  */
 public @Builder
-@Getter
+
 class Request {
     /**
      * timestamp of sending
      */
-    @Builder.Default final long tick = Tick.fromNowUTC();
+    @Getter @Builder.Default final long tick = Tick.fromNowUTC();
     /**
      * arguments must not with Interfaces
      */
     final Object[] arguments;
 
 
-    public Object[] getArguments() {
+    public Object[] getArguments(Function<Object, Object> argumentPreProcessor) {
         if (arguments == null || arguments.length == 0) return arguments;
-        return Seq.of(arguments).map(x ->
-            x instanceof NULL ? null :
-                Rpc.autoDelegate.get() ? MimicUtil.autoDisguise(x) : x
-        ).toArray();
+        return Seq.of(arguments)
+            .map(argumentPreProcessor)
+            .map(x ->
+                x instanceof NULL ? null :
+                    Rpc.autoDelegate.get() ? MimicUtil.autoDisguise(x) : x
+            ).toArray();
     }
 
-    public static Payload build(String domain, String scope, Object[] arguments, boolean trace) {
+    public static Payload build(String domain, String scope, Object[] arguments, BiFunction<Object, Long, Object> argumentPostProcessor, boolean trace) {
+        final long tk = Tick.fromNowUTC();
         final Request request = Request.builder()
-            .arguments(proc(arguments))
+            .tick(tk)
+            .arguments(proc(arguments, x -> argumentPostProcessor.apply(x, tk)))
             .build();
         val meta = Meta.builder().sign(domain).from(scope);
         if (trace) meta.trace(true);
@@ -72,9 +78,11 @@ class Request {
         }
     }
 
-    public static Payload buildCallback(String session, String scope, Object[] arguments, boolean trace) {
+    public static Payload buildCallback(String session, String scope, Object[] arguments, BiFunction<Object, Long, Object> argumentPostProcessor, boolean trace) {
+        final long tk = Tick.fromNowUTC();
         final Request request = Request.builder()
-            .arguments(proc(arguments))
+            .tick(tk)
+            .arguments(proc(arguments, x -> argumentPostProcessor.apply(x, tk)))
             .build();
         val meta = Meta.builder().sign(session).callback(true).from(scope);
         if (trace) meta.trace(true);
@@ -86,12 +94,12 @@ class Request {
         return "REQUEST@" + tick + '{' + Arrays.toString(arguments) + '}';
     }
 
-    static Object[] proc(Object[] arguments) {
+    static Object[] proc(Object[] arguments, Function<Object, Object> argumentPostProcessor) {
         if (arguments == null || arguments.length == 0) return arguments;
         return Seq.of(arguments).map(x ->
             x == null ? NULL.Null :
                 Rpc.autoDelegate.get() ? MimicUtil.autoMimic(x) : x
-        ).toArray();
+        ).map(argumentPostProcessor).toArray();
     }
 
 //todo MimicLambda process

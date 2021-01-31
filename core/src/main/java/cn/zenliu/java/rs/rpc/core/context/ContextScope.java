@@ -47,7 +47,7 @@ public interface ContextScope extends ContextCallback {
                 , null
                 , x -> {
                     try {
-                        handler.apply(request.getArguments());
+                        handler.apply(request.getArguments(this.argumentPreProcessor(remote, meta, request)));
                         if ((getDebug().get() || getTrace().get()) || meta.isTrace()) {
                             x.info("remote trace \n META: {} \n TIME COST: {}", meta, meta.costNow());
                         }
@@ -105,7 +105,7 @@ public interface ContextScope extends ContextCallback {
                 , null
                 , x -> {
                     try {
-                        final Result<Object> res = handler.apply(request.getArguments());
+                        final Result<Object> res = handler.apply(request.getArguments(this.argumentPreProcessor(remote, meta, request)));
                         return Mono.just(Response.build(meta, getName(), res != null ? res : Result.ok(null)));
                     } catch (Exception ex) {
                         x.error("error on process RequestAndResponse:" + LOG_META_REQUEST, meta, request, remote, ex);
@@ -147,7 +147,7 @@ public interface ContextScope extends ContextCallback {
                 , null
                 , x -> {
                     try {
-                        return handler.apply(request.getArguments()).switchOnFirst((s, f) ->
+                        return handler.apply(request.getArguments(this.argumentPreProcessor(remote, meta, request))).switchOnFirst((s, f) ->
                             //switch element process first one have a meta
                             s.hasValue() ?
                                 Flux.just(Response.buildFirstElement(meta, meta.isTrace() ? getName() : getNameOnTrace(), s.get()))
@@ -195,7 +195,7 @@ public interface ContextScope extends ContextCallback {
         return onDebugWithTimerReturns(
             x -> x.debug("remote call \n DOMAIN: {} \n ARGUMENTS: {} .", sign, args)
             , null
-            , x -> remote.getSocket().requestResponse(Request.build(sign, getName(), args, getTrace().get()))
+            , x -> remote.getSocket().requestResponse(Request.build(sign, getName(), args, this::argumentPostProcessor, getTrace().get()))
                 .map(result -> {
                     if ((getDebug().get() || getTrace().get()) && result != null) {
                         final Meta meta = Response.parseMeta(result);
@@ -229,7 +229,7 @@ public interface ContextScope extends ContextCallback {
         return onDebugWithTimerReturns(
             x -> x.debug("remote call \n DOMAIN: {} \n ARGUMENTS: {} .", sign, args)
             , null
-            , x -> remote.getSocket().requestStream(Request.build(sign, getName(), args, getTrace().get()))
+            , x -> remote.getSocket().requestStream(Request.build(sign, getName(), args, this::argumentPostProcessor, getTrace().get()))
                 .switchOnFirst((signal, flux) -> {
                     if (signal.hasValue()) {
                         final Payload result = signal.get();
@@ -257,7 +257,7 @@ public interface ContextScope extends ContextCallback {
             throw new IllegalStateException("not exists service for " + sign);
         }
         debug("do FNF with {} ,{} =>{}", sign, args, remote);
-        return remote.getSocket().fireAndForget(Request.build(sign, getName(), args, getTrace().get()));
+        return remote.getSocket().fireAndForget(Request.build(sign, getName(), args, this::argumentPostProcessor, getTrace().get()));
     }
 
 
