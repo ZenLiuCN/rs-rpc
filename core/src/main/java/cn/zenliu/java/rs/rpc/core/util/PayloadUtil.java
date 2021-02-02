@@ -1,10 +1,12 @@
 package cn.zenliu.java.rs.rpc.core.util;
 
-import cn.zenliu.java.rs.rpc.core.element.Meta;
 import cn.zenliu.java.rs.rpc.core.element.Remote;
 import cn.zenliu.java.rs.rpc.core.element.Request;
 import cn.zenliu.java.rs.rpc.core.element.RouteMeta;
-import cn.zenliu.java.rs.rpc.core.proto.*;
+import cn.zenliu.java.rs.rpc.core.proto.MetaImpl;
+import cn.zenliu.java.rs.rpc.core.proto.Proto;
+import cn.zenliu.java.rs.rpc.core.proto.RequestImpl;
+import cn.zenliu.java.rs.rpc.core.proto.RouteMetaImpl;
 import io.netty.buffer.ByteBufUtil;
 import io.rsocket.Payload;
 import io.rsocket.util.DefaultPayload;
@@ -47,25 +49,6 @@ public interface PayloadUtil {
         return null;
     }
 
-    static Tuple2<Meta, Payload> justMeta(Payload p) {
-        return Tuple.tuple(Proto.from(ByteBufUtil.getBytes(p.sliceMetadata()), MetaImpl.class), p);
-    }
-
-    static RequestImpl mustRequest(Payload p) {
-        try {
-            return Proto.from(ByteBufUtil.getBytes(p.data()), RequestImpl.class);
-        } finally {
-            p.release();
-        }
-    }
-
-    static Response mustResponse(Payload p) {
-        try {
-            return Proto.from(ByteBufUtil.getBytes(p.data()), Response.class);
-        } finally {
-            p.release();
-        }
-    }
 
     static Mono<Void> metaPushHandler(Payload p, Remote r, Consumer<Tuple2<RouteMeta, Remote>> servMetaHandler) {
         return Mono.just(p)

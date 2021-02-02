@@ -9,24 +9,12 @@ import java.util.function.Function;
  * @apiNote
  * @since 2021-02-01
  */
-public interface Request {
-    Meta getMeta();
+public interface Request extends Transmit<Payload, Argument> {
 
-    long getTick();
+    Object[] getArguments(Function<Object, Object> lambdaPreProcess);
 
-    Payload updateMeta(Meta meta);
+    Request setArguments(Object[] arguments, Function<Object, Object> lambdaPostProcessor);
 
-    Payload addTrace(String name);
+    Request setArguments(long tick, Object[] arguments, Function<Object, Object> lambdaPostProcessor);
 
-    Object[] getArguments(Function<Object, Object> preProcessor);
-
-    boolean isInput();
-
-    Request setMeta(Meta meta);
-
-    Request setArgument(Object[] arguments, Function<Object, Object> postProcessor);
-
-    Request setArgument(long tick, Object[] arguments, Function<Object, Object> postProcessor);
-
-    Payload build();
 }

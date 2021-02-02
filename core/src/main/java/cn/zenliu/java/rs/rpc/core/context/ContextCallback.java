@@ -5,7 +5,7 @@ import cn.zenliu.java.rs.rpc.core.element.Meta;
 import cn.zenliu.java.rs.rpc.core.element.Remote;
 import cn.zenliu.java.rs.rpc.core.element.Request;
 import cn.zenliu.java.rs.rpc.core.proto.RequestImpl;
-import cn.zenliu.java.rs.rpc.core.proto.Response;
+import cn.zenliu.java.rs.rpc.core.proto.ResponseImpl;
 import io.rsocket.Payload;
 import mimic.Invokable;
 import mimic.MimicLambda;
@@ -26,8 +26,8 @@ public interface ContextCallback extends ContextRoutes {
     default Payload doCallback(Meta meta, Request request, Remote remote) {
         final Invokable invokable = getCallbackPool().get(meta.getAddress());
         if (invokable == null)
-            return Response.build(meta, getName(), Result.error(new IllegalStateException("invokable missed")));
-        return Response.build(meta, getName(), Result.wrap(() -> invokable.invoke(request.getArguments(this.argumentPreProcessor(remote, meta, request)))));
+            return ResponseImpl.build(meta, getName(), Result.error(new IllegalStateException("invokable missed")));
+        return ResponseImpl.build(meta, getName(), Result.wrap(() -> invokable.invoke(request.getArguments(this.argumentPreProcessor(remote, meta, request)))));
     }
 
     default Object argumentPostProcessor(Object arg, Long tick) {
