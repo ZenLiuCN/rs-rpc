@@ -7,10 +7,12 @@ import java.lang.ref.ReferenceQueue;
 import java.lang.ref.SoftReference;
 import java.lang.ref.WeakReference;
 import java.time.Duration;
+import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 
@@ -45,6 +47,8 @@ public interface Cache<K, V> {
     boolean containsValue(V v);
 
     void clear();
+
+    void dispose();
 
     static <K, V> Cache<K, V> instance(@Nullable Duration ttl, boolean softOrWeak) {
         return softOrWeak ? ttl == null ? new SoftRefCache<>() : new TTLSoftRefCache<>(ttl) : ttl == null ? new WeakRefCache<>() : new TTLWeakRefCache<>(ttl);
@@ -204,11 +208,10 @@ public interface Cache<K, V> {
         final ConcurrentHashMap<K, R> cache = new ConcurrentHashMap<>();
         final ReferenceQueue<V> queue = new ReferenceQueue<>();
         final ExecutorService service = Executors.newCachedThreadPool();
-        private volatile boolean run = true;
-
+        private final AtomicBoolean run = new AtomicBoolean(false);
         protected BaseConcurrentCache() {
-            service.submit(() -> {
-                while (run) {
+            service.execute(() -> {
+                while (run.get()) {
                     final Reference<? extends V> r = queue.poll();
                     if (r != null) cache.forEach((k, v) -> {
                         if (v.hashCode() == r.hashCode()) cache.remove(k);
@@ -218,8 +221,13 @@ public interface Cache<K, V> {
         }
 
         @Override
+        public void dispose() {
+            run.set(false);
+        }
+
+        @Override
         protected void finalize() throws Throwable {
-            run = false;
+            dispose();
             super.finalize();
         }
 
@@ -338,5 +346,16 @@ public interface Cache<K, V> {
         protected TTLWeakRef<V> of(V v) {
             return TTLWeakRef.of(v, ttl, getQueue());
         }
+    }
+
+    static void main(String[] args) throws InterruptedException {
+        Cache<String, Instant> a = Cache.instance(null, true);
+        System.out.println(a.put("1", Instant.now()));
+        System.out.println(a.put("1", Instant.now()));
+        Thread.sleep(10000);
+        System.gc();
+        System.out.println(a.get("1"));
+        a.dispose();
+        System.out.println(a.get("1"));
     }
 }
