@@ -1,5 +1,6 @@
 package mimic;
 
+import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.Nullable;
 
 import java.lang.ref.Reference;
@@ -8,9 +9,10 @@ import java.lang.ref.SoftReference;
 import java.lang.ref.WeakReference;
 import java.time.Duration;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 
@@ -30,7 +32,7 @@ public interface Cache<K, V> {
 
     V computeIfPresent(K k, BiFunction<K, V, V> remappingFunction);
 
-    void purify();
+    void dispose();
 
     boolean remove(K k, V v);
 
@@ -44,9 +46,11 @@ public interface Cache<K, V> {
 
     boolean containsValue(V v);
 
+    void purify();
+
     void clear();
 
-    static <K, V> Cache<K, V> instance(@Nullable Duration ttl, boolean softOrWeak) {
+    static <K, V> Cache<K, V> build(@Nullable Duration ttl, boolean softOrWeak) {
         return softOrWeak ? ttl == null ? new SoftRefCache<>() : new TTLSoftRefCache<>(ttl) : ttl == null ? new WeakRefCache<>() : new TTLWeakRefCache<>(ttl);
     }
 
@@ -200,30 +204,46 @@ public interface Cache<K, V> {
         return t == null ? null : t.get();
     }
 
+    @Slf4j
     abstract class BaseConcurrentCache<K, V, R extends Reference<V>> implements Cache<K, V> {
         final ConcurrentHashMap<K, R> cache = new ConcurrentHashMap<>();
-        final ReferenceQueue<V> queue = new ReferenceQueue<>();
-        final ExecutorService service = Executors.newCachedThreadPool();
-        private volatile boolean run = true;
+        static final ReferenceQueue<?> queue = new ReferenceQueue<>();
+        static final AtomicReference<List<ConcurrentHashMap<?, ?>>> removable = new AtomicReference<>(new ArrayList<>());
+
 
         protected BaseConcurrentCache() {
-            service.submit(() -> {
-                while (run) {
-                    final Reference<? extends V> r = queue.poll();
-                    if (r != null) cache.forEach((k, v) -> {
-                        if (v.hashCode() == r.hashCode()) cache.remove(k);
-                    });
-                }
-            });
+            removable.get().add(cache);
         }
 
         @Override
         protected void finalize() throws Throwable {
-            run = false;
             super.finalize();
         }
 
-        protected ReferenceQueue<V> getQueue() {
+        @Override
+        public void dispose() {
+            removable.get().remove(cache);
+        }
+
+        @Override
+        public void purify() {
+            while (true) {
+                try {
+                    final Reference<?> r = queue.remove(100);
+                    if (r == null) break;
+                    for (ConcurrentHashMap<?, ?> map : removable.get()) {
+                        if (map.values().removeIf(x -> x == r)) {
+                            break;
+                        }
+                    }
+                } catch (InterruptedException ignore) {
+                    log.error("InterruptedException in cache remove from {}", this, ignore);
+                    break;
+                }
+            }
+        }
+
+        protected ReferenceQueue<?> getQueue() {
             return queue;
         }
 
@@ -289,28 +309,22 @@ public interface Cache<K, V> {
             cache.clear();
         }
 
-        @Override
-        public void purify() {
-            cache.forEach((k, v) -> {
-                if (v.get() == null) {
-                    cache.remove(k);
-                }
-            });
-        }
     }
 
     final class SoftRefCache<K, V> extends BaseConcurrentCache<K, V, SoftRef<V>> {
+        @SuppressWarnings("unchecked")
         @Override
         protected SoftRef<V> of(V v) {
-            return SoftRef.of(v, getQueue());
+            return SoftRef.of(v, (ReferenceQueue<? super V>) getQueue());
         }
 
     }
 
     final class WeakRefCache<K, V> extends BaseConcurrentCache<K, V, WeakRef<V>> {
+        @SuppressWarnings("unchecked")
         @Override
         protected WeakRef<V> of(V v) {
-            return WeakRef.of(v, getQueue());
+            return WeakRef.of(v, (ReferenceQueue<? super V>) getQueue());
         }
     }
 
@@ -321,9 +335,10 @@ public interface Cache<K, V> {
             this.ttl = (int) ttl.get(ChronoUnit.MILLIS);
         }
 
+        @SuppressWarnings("unchecked")
         @Override
         protected TTLSoftRef<V> of(V v) {
-            return TTLSoftRef.of(v, ttl, getQueue());
+            return TTLSoftRef.of(v, ttl, (ReferenceQueue<? super V>) getQueue());
         }
     }
 
@@ -334,9 +349,12 @@ public interface Cache<K, V> {
             this.ttl = (int) ttl.get(ChronoUnit.MILLIS);
         }
 
+        @SuppressWarnings("unchecked")
         @Override
         protected TTLWeakRef<V> of(V v) {
-            return TTLWeakRef.of(v, ttl, getQueue());
+            return TTLWeakRef.of(v, ttl, (ReferenceQueue<? super V>) getQueue());
         }
     }
+
+
 }
