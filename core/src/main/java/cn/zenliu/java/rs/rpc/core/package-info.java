@@ -6,6 +6,7 @@
  * 4. Remote: means a RSocketServer or RSocketClient connected into a Scope
  * 5. Domain: means a Unique Service name (current use full name of service class)
  * 6. Handler: a wrapped method of a service instance
- * 7. HandlerSignature: a service method signature {@link cn.zenliu.java.rs.rpc.core.util.ProxyUtil#signature(java.lang.reflect.Method, java.lang.Class)}.
+ * 7. Address: a service method signature {@link cn.zenliu.java.rs.rpc.core.util.ProxyUtil#signature(java.lang.reflect.Method, java.lang.Class)}.
+ * 8. Route: Address?SourceScope[>RoutingScope>RoutingScope...].
  */
 package cn.zenliu.java.rs.rpc.core;

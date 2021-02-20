@@ -5,7 +5,6 @@ import org.jetbrains.annotations.Nullable;
 import org.jooq.lambda.tuple.Tuple4;
 
 import java.time.Duration;
-import java.util.Map;
 import java.util.function.Predicate;
 
 
@@ -29,10 +28,14 @@ public interface MimicApi {
     }
 
     /**
-     * purify caches to remove empty references
+     * purify caches to remove empty references<br/>
+     *
+     * @see {@link mimic.Cache.purifyAll()}
+     * @see {@link mimic.Cache.purifyTTL()}
      */
     static void purifyCaches() {
         Cache.purifyAll();
+        Cache.purifyTTL();
     }
 
     /**

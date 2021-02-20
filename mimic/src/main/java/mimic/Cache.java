@@ -1,5 +1,6 @@
 package mimic;
 
+import lombok.Getter;
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.Nullable;
@@ -56,10 +57,20 @@ public interface Cache<K, V> {
     void clear();
 
     static <K, V> Cache<K, V> build(@Nullable Duration ttl, boolean softOrWeak) {
-        return softOrWeak ? ttl == null ? new SoftRefCache<>() : new TTLSoftRefCache<>(ttl) : ttl == null ? new WeakRefCache<>() : new TTLWeakRefCache<>(ttl);
+        return softOrWeak ?
+            ttl == null ? new SoftRefCache<>(true) : new TTLSoftRefCache<>(ttl, true)
+            : ttl == null ? new WeakRefCache<>(true) : new TTLWeakRefCache<>(ttl, true);
+    }
+
+    static <K, V> Cache<K, V> buildNoneAutoPurify(@Nullable Duration ttl, boolean softOrWeak) {
+        return softOrWeak ?
+            ttl == null ? new SoftRefCache<>(false) : new TTLSoftRefCache<>(ttl, false)
+            : ttl == null ? new WeakRefCache<>(false) : new TTLWeakRefCache<>(ttl, false);
     }
 
     interface WithTTl {
+        boolean isAutoPurify();
+
         boolean isExpired();
 
         WithTTl putArray(List<WithTTl> array);
@@ -105,17 +116,19 @@ public interface Cache<K, V> {
 
     final class TTLSoftRef<T> extends SoftReference<T> implements WithTTl {
         private final int hashCode;
+        @Getter private final boolean autoPurify;
 
         private final long ttl;
 
-        TTLSoftRef(@NonNull T referent, int ttl) {
-            this(referent, ttl, null);
+        TTLSoftRef(@NonNull T referent, int ttl, boolean autoPurify) {
+            this(referent, ttl, null, autoPurify);
         }
 
-        TTLSoftRef(@NonNull T referent, int ttl, ReferenceQueue<? super T> q) {
+        TTLSoftRef(@NonNull T referent, int ttl, ReferenceQueue<? super T> q, boolean autoPurify) {
             super(referent, q);
             this.hashCode = referent.hashCode();
             this.ttl = System.currentTimeMillis() + ttl;
+            this.autoPurify = autoPurify;
         }
 
         @Override
@@ -145,12 +158,12 @@ public interface Cache<K, V> {
             return t != null && t.equals(obj);
         }
 
-        static <T> TTLSoftRef<T> of(T v, int ttl, ReferenceQueue<? super T> q) {
-            return new TTLSoftRef<>(v, ttl, q);
+        static <T> TTLSoftRef<T> of(T v, boolean autoPurify, int ttl, ReferenceQueue<? super T> q) {
+            return new TTLSoftRef<>(v, ttl, q, autoPurify);
         }
 
-        static <T> TTLSoftRef<T> of(T v, int ttl) {
-            return new TTLSoftRef<>(v, ttl);
+        static <T> TTLSoftRef<T> of(T v, boolean autoPurify, int ttl) {
+            return new TTLSoftRef<>(v, ttl, autoPurify);
         }
 
         @Override
@@ -203,15 +216,17 @@ public interface Cache<K, V> {
     final class TTLWeakRef<T> extends WeakReference<T> implements WithTTl {
         private final int hashCode;
         private final long ttl;
+        @Getter private final boolean autoPurify;
 
-        TTLWeakRef(@NonNull T referent, int ttl) {
-            this(referent, ttl, null);
+        TTLWeakRef(@NonNull T referent, int ttl, boolean autoPurify) {
+            this(referent, ttl, null, autoPurify);
         }
 
-        TTLWeakRef(@NonNull T referent, int ttl, ReferenceQueue<? super T> q) {
+        TTLWeakRef(@NonNull T referent, int ttl, ReferenceQueue<? super T> q, boolean autoPurify) {
             super(referent, q);
             this.hashCode = referent.hashCode();
             this.ttl = System.currentTimeMillis() + ttl;
+            this.autoPurify = autoPurify;
         }
 
         @Override
@@ -241,12 +256,12 @@ public interface Cache<K, V> {
             return t != null && t.equals(obj);
         }
 
-        static <T> TTLWeakRef<T> of(T v, int ttl, ReferenceQueue<? super T> q) {
-            return new TTLWeakRef<>(v, ttl, q);
+        static <T> TTLWeakRef<T> of(T v, boolean autoPurify, int ttl, ReferenceQueue<? super T> q) {
+            return new TTLWeakRef<>(v, ttl, q, autoPurify);
         }
 
-        static <T> TTLWeakRef<T> of(T v, int ttl) {
-            return new TTLWeakRef<>(v, ttl);
+        static <T> TTLWeakRef<T> of(T v, boolean autoPurify, int ttl) {
+            return new TTLWeakRef<>(v, ttl, autoPurify);
         }
 
         @Override
@@ -269,6 +284,10 @@ public interface Cache<K, V> {
         BaseConcurrentCache.purifyAll();
     }
 
+    static void purifyTTL() {
+        BaseConcurrentCache.purifyTTL();
+    }
+
     @Slf4j
     abstract class BaseConcurrentCache<K, V, R extends Reference<V>> implements Cache<K, V> {
         final ConcurrentHashMap<K, R> cache = new ConcurrentHashMap<>();
@@ -276,10 +295,14 @@ public interface Cache<K, V> {
         static final List<WeakReference<BaseConcurrentCache<?, ?, ?>>> queuePool = new CopyOnWriteArrayList<>();
         static final List<WithTTl> ttlQueuePool = new CopyOnWriteArrayList<>();
 
-        static void purifyAll() {
+        static void purifyTTL() {
             for (WithTTl ttl : ttlQueuePool) {
                 if (ttl.isExpired()) ttl.enqueue();
             }
+        }
+
+        static void purifyAll() {
+
             for (WeakReference<BaseConcurrentCache<?, ?, ?>> r : queuePool) {
                 final BaseConcurrentCache<?, ?, ?> cache = r.get();
                 if (cache == null) {
@@ -296,8 +319,11 @@ public interface Cache<K, V> {
             }
         }
 
-        protected BaseConcurrentCache() {
-            queuePool.add(new WeakReference<>(this));
+        final boolean autoPurify;
+
+        protected BaseConcurrentCache(boolean autoPurify) {
+            if (autoPurify) queuePool.add(new WeakReference<>(this));
+            this.autoPurify = autoPurify;
         }
 
 
@@ -307,7 +333,7 @@ public interface Cache<K, V> {
         }
 
         protected ReferenceQueue<?> getQueue() {
-            return queue;
+            return autoPurify ? queue : null;
         }
 
         @Override
@@ -389,6 +415,10 @@ public interface Cache<K, V> {
     }
 
     final class SoftRefCache<K, V> extends BaseConcurrentCache<K, V, SoftRef<V>> {
+        protected SoftRefCache(boolean autoPurify) {
+            super(autoPurify);
+        }
+
         @SuppressWarnings("unchecked")
         @Override
         protected SoftRef<V> of(V v) {
@@ -398,6 +428,10 @@ public interface Cache<K, V> {
     }
 
     final class WeakRefCache<K, V> extends BaseConcurrentCache<K, V, WeakRef<V>> {
+        protected WeakRefCache(boolean autoPurify) {
+            super(autoPurify);
+        }
+
         @SuppressWarnings("unchecked")
         @Override
         protected WeakRef<V> of(V v) {
@@ -408,27 +442,30 @@ public interface Cache<K, V> {
     final class TTLSoftRefCache<K, V> extends BaseConcurrentCache<K, V, TTLSoftRef<V>> {
         final int ttl;
 
-        TTLSoftRefCache(Duration ttl) {
+        TTLSoftRefCache(Duration ttl, boolean autoPurify) {
+            super(autoPurify);
             this.ttl = (int) ttl.get(ChronoUnit.MILLIS);
         }
 
         @SuppressWarnings("unchecked")
         @Override
         protected TTLSoftRef<V> of(V v) {
-            return TTLSoftRef.of(v, ttl, (ReferenceQueue<? super V>) getQueue()).putArray(BaseConcurrentCache.ttlQueuePool);
+            return TTLSoftRef.of(v, autoPurify, ttl, (ReferenceQueue<? super V>) getQueue()).putArray(BaseConcurrentCache.ttlQueuePool);
         }
     }
 
     final class TTLWeakRefCache<K, V> extends BaseConcurrentCache<K, V, TTLWeakRef<V>> {
         final int ttl;
 
-        TTLWeakRefCache(Duration ttl) {
+        TTLWeakRefCache(Duration ttl, boolean autoPurify) {
+            super(autoPurify);
             this.ttl = (int) ttl.get(ChronoUnit.MILLIS);
         }
+
         @SuppressWarnings("unchecked")
         @Override
         protected TTLWeakRef<V> of(V v) {
-            return TTLWeakRef.of(v, ttl, (ReferenceQueue<? super V>) getQueue()).putArray(BaseConcurrentCache.ttlQueuePool);
+            return TTLWeakRef.of(v, autoPurify, ttl, (ReferenceQueue<? super V>) getQueue()).putArray(BaseConcurrentCache.ttlQueuePool);
         }
     }
 
