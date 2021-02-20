@@ -4,6 +4,7 @@ import mimic.*;
 import org.jetbrains.annotations.Nullable;
 import org.jooq.lambda.tuple.Tuple4;
 
+import java.time.Duration;
 import java.util.Map;
 import java.util.function.Predicate;
 
@@ -140,13 +141,6 @@ public interface MimicApi {
         return null;
     }
 
-    static <K, V> ConcurrentReferenceHashMap<K, V> buildSoftConcurrentCache() {
-        return new ConcurrentReferenceHashMap<>(ConcurrentReferenceHashMap.ReferenceType.STRONG, ConcurrentReferenceHashMap.ReferenceType.SOFT);
-    }
-
-    static <K, V> ConcurrentReferenceHashMap<K, V> buildWeakConcurrentCache() {
-        return new ConcurrentReferenceHashMap<>(ConcurrentReferenceHashMap.ReferenceType.STRONG, ConcurrentReferenceHashMap.ReferenceType.WEAK);
-    }
 
     /**
      * call remote if true , else should call locally (such as Supplier)
@@ -161,5 +155,9 @@ public interface MimicApi {
         String //the method name
         > prepareLambda(Object arg) {
         return MimicLambdaUtil.prepareLambda(arg);
+    }
+
+    static <K, V> Cache<K, V> buildCache(@Nullable Duration ttl, boolean softOrWeak) {
+        return Cache.build(ttl, softOrWeak);
     }
 }

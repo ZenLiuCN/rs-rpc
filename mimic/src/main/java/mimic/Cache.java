@@ -13,11 +13,8 @@ import java.lang.ref.WeakReference;
 import java.time.Duration;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 
@@ -64,6 +61,8 @@ public interface Cache<K, V> {
 
     interface WithTTl {
         boolean isExpired();
+
+        WithTTl putArray(List<WithTTl> array);
 
         boolean enqueue();
     }
@@ -119,6 +118,7 @@ public interface Cache<K, V> {
             this.ttl = System.currentTimeMillis() + ttl;
         }
 
+        @Override
         public TTLSoftRef<T> putArray(List<WithTTl> array) {
             array.add(this);
             return this;
@@ -214,6 +214,7 @@ public interface Cache<K, V> {
             this.ttl = System.currentTimeMillis() + ttl;
         }
 
+        @Override
         public TTLWeakRef<T> putArray(List<WithTTl> array) {
             array.add(this);
             return this;
@@ -424,7 +425,6 @@ public interface Cache<K, V> {
         TTLWeakRefCache(Duration ttl) {
             this.ttl = (int) ttl.get(ChronoUnit.MILLIS);
         }
-
         @SuppressWarnings("unchecked")
         @Override
         protected TTLWeakRef<V> of(V v) {
