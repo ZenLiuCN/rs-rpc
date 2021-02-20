@@ -7,10 +7,7 @@ import org.jooq.lambda.tuple.Tuple;
 import org.jooq.lambda.tuple.Tuple2;
 
 import java.lang.ref.WeakReference;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.function.Function;
@@ -128,7 +125,18 @@ public interface RouteTable {
 
         @Override
         public RouteTable addRoute(RouteMeta meta, Remote remote) {
-            //TODO impl
+            for (String s : meta.getRoutes()) {
+                Route r = Route.fromRoute(s);
+                final String address = r.getAddress();
+                ConcurrentSkipListSet<WeightedRemote> lists = registry.get(address);
+                final WeightedRemote weightedRemote = new WeightedRemote(remote, r.jumps());
+                if (lists == null)
+                    lists = new ConcurrentSkipListSet<>(Comparator.comparingInt(x -> x.remote.getIndex() + x.jump));
+                else
+                    lists.remove(weightedRemote);
+                lists.add(weightedRemote);
+                registry.put(address, lists);
+            }
             return this;
         }
 

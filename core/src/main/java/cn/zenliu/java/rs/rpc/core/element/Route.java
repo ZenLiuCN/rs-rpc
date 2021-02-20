@@ -17,7 +17,7 @@ public interface Route {
 
     String getMethod();
 
-    String getSign();
+    String getAddress();
 
     boolean isRouting();
 
@@ -50,7 +50,7 @@ public interface Route {
         @NonNull() final String[] routing;
 
         @Override
-        public String getSign() {
+        public String getAddress() {
             return service + SERVICE_DIVIDER + method;
         }
 
