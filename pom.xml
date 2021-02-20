@@ -30,6 +30,7 @@
         <version.jetbrains-anno>20.1.0</version.jetbrains-anno>
         <version.lombok>1.18.16</version.lombok>
         <version.protostuff>1.7.2</version.protostuff>
+        <version.caffeine>2.8.6</version.caffeine>
         <version.junit-jupeter>5.4.2</version.junit-jupeter>
         <version.sl4j>1.7.30</version.sl4j>
     </properties>
@@ -72,6 +73,11 @@
                 <groupId>io.protostuff</groupId>
                 <artifactId>protostuff-runtime</artifactId>
                 <version>${version.protostuff}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.github.ben-manes.caffeine</groupId>
+                <artifactId>caffeine</artifactId>
+                <version>${version.caffeine}</version>
             </dependency>
             <dependency>
                 <groupId>io.protostuff</groupId>

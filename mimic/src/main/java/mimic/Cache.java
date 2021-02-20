@@ -1,18 +1,20 @@
 package mimic;
 
+import lombok.NonNull;
+import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.Nullable;
+import org.jetbrains.annotations.Unmodifiable;
+import org.jooq.lambda.Seq;
 
 import java.lang.ref.Reference;
 import java.lang.ref.ReferenceQueue;
 import java.lang.ref.SoftReference;
 import java.lang.ref.WeakReference;
 import java.time.Duration;
-import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 
@@ -32,7 +34,10 @@ public interface Cache<K, V> {
 
     V computeIfPresent(K k, BiFunction<K, V, V> remappingFunction);
 
-    void purify();
+    @Unmodifiable Set<K> getKeys();
+
+    @Unmodifiable Collection<V> getValues();
+
 
     boolean remove(K k, V v);
 
@@ -46,24 +51,30 @@ public interface Cache<K, V> {
 
     boolean containsValue(V v);
 
+    void purify();
+
     void clear();
 
-    void dispose();
-
-    static <K, V> Cache<K, V> instance(@Nullable Duration ttl, boolean softOrWeak) {
+    static <K, V> Cache<K, V> build(@Nullable Duration ttl, boolean softOrWeak) {
         return softOrWeak ? ttl == null ? new SoftRefCache<>() : new TTLSoftRefCache<>(ttl) : ttl == null ? new WeakRefCache<>() : new TTLWeakRefCache<>(ttl);
+    }
+
+    interface WithTTl {
+        boolean isExpired();
+
+        boolean enqueue();
     }
 
     final class SoftRef<T> extends SoftReference<T> {
         private final int hashCode;
 
-        SoftRef(T referent) {
+        SoftRef(@NonNull T referent) {
             this(referent, null);
         }
 
-        SoftRef(T referent, ReferenceQueue<? super T> q) {
+        SoftRef(@NonNull T referent, ReferenceQueue<? super T> q) {
             super(referent, q);
-            this.hashCode = System.identityHashCode(referent);
+            this.hashCode = referent.hashCode();
         }
 
         @Override
@@ -74,6 +85,10 @@ public interface Cache<K, V> {
         @Override
         public boolean equals(Object obj) {
             final T t = get();
+            if (t == obj) return true;
+            if (obj instanceof Reference<?>) {
+                return t != null && t.equals(((Reference<?>) obj).get());
+            }
             return t != null && t.equals(obj);
         }
 
@@ -86,24 +101,29 @@ public interface Cache<K, V> {
         }
     }
 
-    final class TTLSoftRef<T> extends SoftReference<T> {
+    final class TTLSoftRef<T> extends SoftReference<T> implements WithTTl {
         private final int hashCode;
 
         private final long ttl;
 
-        TTLSoftRef(T referent, int ttl) {
+        TTLSoftRef(@NonNull T referent, int ttl) {
             this(referent, ttl, null);
         }
 
-        TTLSoftRef(T referent, int ttl, ReferenceQueue<? super T> q) {
+        TTLSoftRef(@NonNull T referent, int ttl, ReferenceQueue<? super T> q) {
             super(referent, q);
-            this.hashCode = System.identityHashCode(referent);
+            this.hashCode = referent.hashCode();
             this.ttl = System.currentTimeMillis() + ttl;
+        }
+
+        public TTLSoftRef<T> putArray(List<WithTTl> array) {
+            array.add(this);
+            return this;
         }
 
         @Override
         public T get() {
-            if (ttl < System.currentTimeMillis()) return null;
+            if (isExpired()) return null;
             return super.get();
         }
 
@@ -115,6 +135,10 @@ public interface Cache<K, V> {
         @Override
         public boolean equals(Object obj) {
             final T t = get();
+            if (t == obj) return true;
+            if (obj instanceof Reference<?>) {
+                return t != null && t.equals(((Reference<?>) obj).get());
+            }
             return t != null && t.equals(obj);
         }
 
@@ -125,18 +149,28 @@ public interface Cache<K, V> {
         static <T> TTLSoftRef<T> of(T v, int ttl) {
             return new TTLSoftRef<>(v, ttl);
         }
+
+        @Override
+        public boolean isExpired() {
+            return ttl < System.currentTimeMillis() && !super.isEnqueued();
+        }
+
+        @Override
+        public boolean enqueue() {
+            return super.enqueue();
+        }
     }
 
     final class WeakRef<T> extends WeakReference<T> {
         private final int hashCode;
 
-        WeakRef(T referent) {
+        WeakRef(@NonNull T referent) {
             this(referent, null);
         }
 
-        WeakRef(T referent, ReferenceQueue<? super T> q) {
+        WeakRef(@NonNull T referent, ReferenceQueue<? super T> q) {
             super(referent, q);
-            this.hashCode = System.identityHashCode(referent);
+            this.hashCode = referent.hashCode();
         }
 
         @Override
@@ -147,6 +181,10 @@ public interface Cache<K, V> {
         @Override
         public boolean equals(Object obj) {
             final T t = get();
+            if (t == obj) return true;
+            if (obj instanceof Reference<?>) {
+                return t != null && t.equals(((Reference<?>) obj).get());
+            }
             return t != null && t.equals(obj);
         }
 
@@ -159,23 +197,28 @@ public interface Cache<K, V> {
         }
     }
 
-    final class TTLWeakRef<T> extends WeakReference<T> {
+    final class TTLWeakRef<T> extends WeakReference<T> implements WithTTl {
         private final int hashCode;
         private final long ttl;
 
-        TTLWeakRef(T referent, int ttl) {
+        TTLWeakRef(@NonNull T referent, int ttl) {
             this(referent, ttl, null);
         }
 
-        TTLWeakRef(T referent, int ttl, ReferenceQueue<? super T> q) {
+        TTLWeakRef(@NonNull T referent, int ttl, ReferenceQueue<? super T> q) {
             super(referent, q);
-            this.hashCode = System.identityHashCode(referent);
+            this.hashCode = referent.hashCode();
             this.ttl = System.currentTimeMillis() + ttl;
+        }
+
+        public TTLWeakRef<T> putArray(List<WithTTl> array) {
+            array.add(this);
+            return this;
         }
 
         @Override
         public T get() {
-            if (ttl < System.currentTimeMillis()) return null;
+            if (isExpired()) return null;
             return super.get();
         }
 
@@ -187,6 +230,10 @@ public interface Cache<K, V> {
         @Override
         public boolean equals(Object obj) {
             final T t = get();
+            if (t == obj) return true;
+            if (obj instanceof Reference<?>) {
+                return t != null && t.equals(((Reference<?>) obj).get());
+            }
             return t != null && t.equals(obj);
         }
 
@@ -197,6 +244,16 @@ public interface Cache<K, V> {
         static <T> TTLWeakRef<T> of(T v, int ttl) {
             return new TTLWeakRef<>(v, ttl);
         }
+
+        @Override
+        public boolean isExpired() {
+            return ttl < System.currentTimeMillis() && !super.isEnqueued();
+        }
+
+        @Override
+        public boolean enqueue() {
+            return super.enqueue();
+        }
     }
 
 
@@ -204,35 +261,63 @@ public interface Cache<K, V> {
         return t == null ? null : t.get();
     }
 
+    static void purifyAll() {
+        BaseConcurrentCache.purifyAll();
+    }
+
+    @Slf4j
     abstract class BaseConcurrentCache<K, V, R extends Reference<V>> implements Cache<K, V> {
         final ConcurrentHashMap<K, R> cache = new ConcurrentHashMap<>();
-        final ReferenceQueue<V> queue = new ReferenceQueue<>();
-        final ExecutorService service = Executors.newCachedThreadPool();
-        private final AtomicBoolean run = new AtomicBoolean(false);
-        protected BaseConcurrentCache() {
-            service.execute(() -> {
-                while (run.get()) {
-                    final Reference<? extends V> r = queue.poll();
-                    if (r != null) cache.forEach((k, v) -> {
-                        if (v.hashCode() == r.hashCode()) cache.remove(k);
-                    });
+        final ReferenceQueue<?> queue = new ReferenceQueue<>();
+        static final List<WeakReference<BaseConcurrentCache<?, ?, ?>>> queuePool = new CopyOnWriteArrayList<>();
+        static final List<WithTTl> ttlQueuePool = new CopyOnWriteArrayList<>();
+
+        static void purifyAll() {
+            for (WithTTl ttl : ttlQueuePool) {
+                if (ttl.isExpired()) ttl.enqueue();
+            }
+            for (WeakReference<BaseConcurrentCache<?, ?, ?>> r : queuePool) {
+                final BaseConcurrentCache<?, ?, ?> cache = r.get();
+                if (cache == null) {
+                    queuePool.remove(r);
+                } else {
+                    Reference<?> ref = cache.queue.poll();
+                    if (ref == null) continue;
+                    do {
+                        final Reference<?> reff = ref;
+                        cache.cache.values().removeIf(x -> x.hashCode() == reff.hashCode());
+                        ref = cache.queue.poll();
+                    } while (ref != null);
                 }
-            });
+            }
         }
+
+        protected BaseConcurrentCache() {
+            queuePool.add(new WeakReference<>(this));
+        }
+
 
         @Override
-        public void dispose() {
-            run.set(false);
+        public void purify() {
+            cache.values().removeIf(x -> x.get() == null);
         }
 
-        @Override
-        protected void finalize() throws Throwable {
-            dispose();
-            super.finalize();
-        }
-
-        protected ReferenceQueue<V> getQueue() {
+        protected ReferenceQueue<?> getQueue() {
             return queue;
+        }
+
+        @Override
+        public Set<K> getKeys() {
+            return Collections.unmodifiableSet(cache.keySet());
+        }
+
+        @Override
+        public @Unmodifiable Collection<V> getValues() {
+            return Collections
+                .unmodifiableCollection(Seq.seq(cache.values())
+                    .map(Reference::get)
+                    .filter(Objects::nonNull)
+                    .toCollection(ArrayList::new));
         }
 
         @Override
@@ -284,7 +369,7 @@ public interface Cache<K, V> {
 
         @Override
         public boolean containsKey(K k) {
-            return cache.containsKey(k);
+            return cache.get(k) != null && cache.get(k).get() != null;
         }
 
         @Override
@@ -297,28 +382,22 @@ public interface Cache<K, V> {
             cache.clear();
         }
 
-        @Override
-        public void purify() {
-            cache.forEach((k, v) -> {
-                if (v.get() == null) {
-                    cache.remove(k);
-                }
-            });
-        }
     }
 
     final class SoftRefCache<K, V> extends BaseConcurrentCache<K, V, SoftRef<V>> {
+        @SuppressWarnings("unchecked")
         @Override
         protected SoftRef<V> of(V v) {
-            return SoftRef.of(v, getQueue());
+            return SoftRef.of(v, (ReferenceQueue<? super V>) getQueue());
         }
 
     }
 
     final class WeakRefCache<K, V> extends BaseConcurrentCache<K, V, WeakRef<V>> {
+        @SuppressWarnings("unchecked")
         @Override
         protected WeakRef<V> of(V v) {
-            return WeakRef.of(v, getQueue());
+            return WeakRef.of(v, (ReferenceQueue<? super V>) getQueue());
         }
     }
 
@@ -329,9 +408,10 @@ public interface Cache<K, V> {
             this.ttl = (int) ttl.get(ChronoUnit.MILLIS);
         }
 
+        @SuppressWarnings("unchecked")
         @Override
         protected TTLSoftRef<V> of(V v) {
-            return TTLSoftRef.of(v, ttl, getQueue());
+            return TTLSoftRef.of(v, ttl, (ReferenceQueue<? super V>) getQueue()).putArray(BaseConcurrentCache.ttlQueuePool);
         }
     }
 
@@ -342,20 +422,12 @@ public interface Cache<K, V> {
             this.ttl = (int) ttl.get(ChronoUnit.MILLIS);
         }
 
+        @SuppressWarnings("unchecked")
         @Override
         protected TTLWeakRef<V> of(V v) {
-            return TTLWeakRef.of(v, ttl, getQueue());
+            return TTLWeakRef.of(v, ttl, (ReferenceQueue<? super V>) getQueue()).putArray(BaseConcurrentCache.ttlQueuePool);
         }
     }
 
-    static void main(String[] args) throws InterruptedException {
-        Cache<String, Instant> a = Cache.instance(null, true);
-        System.out.println(a.put("1", Instant.now()));
-        System.out.println(a.put("1", Instant.now()));
-        Thread.sleep(10000);
-        System.gc();
-        System.out.println(a.get("1"));
-        a.dispose();
-        System.out.println(a.get("1"));
-    }
+
 }

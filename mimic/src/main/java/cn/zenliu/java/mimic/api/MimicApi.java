@@ -15,6 +15,26 @@ import java.util.function.Predicate;
  */
 public interface MimicApi {
     /**
+     * auto purify caches, execute {@link MimicApi#purifyCaches()} in a new daemon thread
+     */
+    static void autoPurifyCaches() {
+        final Thread executor = new Thread(() -> {
+            while (true) {
+                purifyCaches();
+            }
+        }, "cache-purifier");
+        executor.setDaemon(true);
+        executor.start();
+    }
+
+    /**
+     * purify caches to remove empty references
+     */
+    static void purifyCaches() {
+        Cache.purifyAll();
+    }
+
+    /**
      * set interface predicate for need to mimic
      *
      * @param interfacePredicate the interface name predicate
