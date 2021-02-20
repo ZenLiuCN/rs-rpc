@@ -157,6 +157,15 @@ public interface MimicApi {
         return MimicLambdaUtil.prepareLambda(arg);
     }
 
+    /**
+     * build a Referenced Cache
+     *
+     * @param ttl        time to live. if null will not use ttl.
+     * @param softOrWeak soft reference or weak reference
+     * @param <K>        the cache key
+     * @param <V>        the cache value
+     * @return a Cache
+     */
     static <K, V> Cache<K, V> buildCache(@Nullable Duration ttl, boolean softOrWeak) {
         return Cache.build(ttl, softOrWeak);
     }
