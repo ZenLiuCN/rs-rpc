@@ -163,7 +163,7 @@ public interface MimicUtil {
         if (staticMapping.containsKey(instance.getClass())) {
             return staticMapping.get(instance.getClass()).apply(instance);
         } else if (!predicateMapping.isEmpty()) {
-            for (Predicate<Object> next : predicateMapping.keySet()) {
+            for (Predicate<Object> next : predicateMapping.getKeys()) {
                 if (next.test(instance)) return predicateMapping.get(next).apply(instance);
             }
         }

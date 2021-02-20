@@ -3,7 +3,6 @@ package mimic;
 import lombok.SneakyThrows;
 import org.jetbrains.annotations.Nullable;
 
-import java.lang.ref.SoftReference;
 import java.lang.reflect.AccessibleObject;
 import java.lang.reflect.Member;
 import java.lang.reflect.Method;
@@ -47,15 +46,16 @@ public interface ReflectUtil {
 
     static Method[] getMethods(Class<?> clazz) {
         if (reflectMethodsCache.containsKey(clazz)) {
-            final SoftReference<Method[]> ref = reflectMethodsCache.get(clazz);
-            if (ref.get() != null) {
-                return ref.get();
+            final Method[] ref = reflectMethodsCache.get(clazz);
+            if (ref != null) {
+                return ref;
             }
         }
         final Method[] declaredMethods = clazz.getMethods();
-        reflectMethodsCache.put(clazz, new SoftReference<>(declaredMethods));
+        reflectMethodsCache.put(clazz, declaredMethods);
         return declaredMethods;
     }
+
 
     static List<Method> publicMethods(Class<?> clazz, @Nullable Predicate<Method> methodPredicate) {
         final ArrayList<Method> list = new ArrayList<>();
@@ -75,11 +75,11 @@ public interface ReflectUtil {
 
     static List<Method> getterMethods(Class<?> clazz) {
         if (reflectGetterCache.containsKey(clazz)) {
-            final SoftReference<List<Method>> ref = reflectGetterCache.get(clazz);
-            if (ref.get() != null) return ref.get();
+            final List<Method> ref = reflectGetterCache.get(clazz);
+            if (ref != null) return ref;
         }
         final List<Method> list = publicMethods(clazz, getterPredicate.get());
-        reflectGetterCache.put(clazz, new SoftReference<>(list));
+        reflectGetterCache.put(clazz, list);
         return list;
     }
 

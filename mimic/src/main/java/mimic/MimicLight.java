@@ -9,11 +9,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 import java.util.function.Function;
 
 import static mimic.ReflectUtil.getterMethodsMapping;
-import static mimic.internal.buildSoftConcurrentCache;
 import static org.jooq.lambda.tuple.Tuple.tuple;
 
 /**
@@ -79,11 +77,11 @@ public final class MimicLight<T> extends BaseMimic<T> {
     public String toString() {
         return dump();
     }
-//region Static
+    //region Static
     /**
      * Copier Cache
      */
-    final static ConcurrentMap<Class<?>, Function<Object, Map<String, Object>>> copier = buildSoftConcurrentCache();
+    final static Cache<Class<?>, Function<Object, Map<String, Object>>> copier = Cache.build(null, true);
 
     /**
      * Build a Delegate Proxy via Initial values

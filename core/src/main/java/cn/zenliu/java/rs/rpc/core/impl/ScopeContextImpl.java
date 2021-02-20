@@ -17,7 +17,6 @@ import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
 import reactor.core.scheduler.Schedulers;
 
-import java.lang.ref.WeakReference;
 import java.time.Duration;
 import java.util.HashSet;
 import java.util.Map;
@@ -162,11 +161,11 @@ public abstract class ScopeContextImpl implements ContextScope, ContextServers, 
     /**
      * local registered service domain
      */
-    @Getter final Cache<Class<?>, WeakReference<Object>> services = MimicApi.buildCache(null, false);
+    @Getter final Cache<Class<?>, Object> services = MimicApi.buildCache(null, false);
     /**
      * local Proxy Services
      */
-    @Getter final Cache<Class<?>, WeakReference<Object>> proxies = MimicApi.buildCache(null, false);
+    @Getter final Cache<Class<?>, Object> proxies = MimicApi.buildCache(null, false);
     /**
      * local registered handler
      */

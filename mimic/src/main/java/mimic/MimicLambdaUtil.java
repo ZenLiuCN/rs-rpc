@@ -6,11 +6,10 @@ import org.jooq.lambda.tuple.Tuple3;
 import org.jooq.lambda.tuple.Tuple4;
 
 import java.lang.reflect.Method;
-import java.util.Map;
 import java.util.function.*;
 
 import static mimic.MimicLambdaUtil.internal.jvmWrapLambda;
-import static mimic.MimicLambdaUtil.internal.reflectWrapLambda;
+import static mimic.MimicLambdaUtil.internal.reflectWarpLambda;
 import static org.jooq.lambda.tuple.Tuple.tuple;
 
 /**
@@ -27,7 +26,7 @@ public interface MimicLambdaUtil {
         > prepareLambda(Object arg) {
         if (arg == null || !isLambda(arg)) return null;
         final Tuple4<Boolean, Invokable, Class<?>, String> tuple = jvmWrapLambda(arg);
-        return tuple == null ? reflectWrapLambda(arg) : tuple;
+        return tuple == null ? reflectWarpLambda(arg) : tuple;
     }
 
 
@@ -36,7 +35,7 @@ public interface MimicLambdaUtil {
     }
 
     final class internal {
-        static Map<Class<?>, Tuple3<Boolean, Class<?>, Method>> cache = MimicApi.buildSoftConcurrentCache();
+        static Cache<Class<?>, Tuple3<Boolean, Class<?>, Method>> cache = MimicApi.buildCache(null, true);
 
         static Class<?> findFunctionalInterface(Class<?> some) {
             final Class<?>[] interfaces = some.getInterfaces();
@@ -112,7 +111,7 @@ public interface MimicLambdaUtil {
             Invokable,
             Class<?>,//the functional interface
             String//the method Name
-            > reflectWrapLambda(Object arg) {
+            > reflectWarpLambda(Object arg) {
             final boolean b = isReflectLambda(arg);
             if (!b) return null;
             final Tuple3<Boolean, Class<?>, Method> m = cache.get(arg.getClass());

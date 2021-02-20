@@ -3,7 +3,6 @@ package mimic;
 import org.jooq.lambda.tuple.Tuple;
 import org.jooq.lambda.tuple.Tuple2;
 
-import java.lang.ref.SoftReference;
 import java.lang.reflect.Method;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -22,11 +21,8 @@ import static org.jooq.lambda.tuple.Tuple.tuple;
  */
 final class internal {
 
-    static <K, V> ConcurrentReferenceHashMap<K, V> buildSoftConcurrentCache() {
-        return new ConcurrentReferenceHashMap<>(ConcurrentReferenceHashMap.ReferenceType.STRONG, ConcurrentReferenceHashMap.ReferenceType.SOFT);
-    }
 
-    static final Map<Class<?>, Function<Object, MimicDeep<?>>> delegator = buildSoftConcurrentCache();
+    static final Cache<Class<?>, Function<Object, MimicDeep<?>>> delegator = Cache.build(null, true);
     static final AtomicReference<Predicate<String>> interfaceNamePredicate = new AtomicReference<>(x -> true);
     static final List<Predicate<String>> commonInterfacePackagePredicate = Arrays.asList(
         x -> x.startsWith("java."),
@@ -54,9 +50,9 @@ final class internal {
     static final AtomicReference<Predicate<Method>> getterPredicate = new AtomicReference<>(ReflectUtil::javaBeanGetterPredicate);
     static final AtomicBoolean fluent = new AtomicBoolean(false);
 
-    static final Map<Class<?>, SoftReference<Method[]>> reflectMethodsCache = buildSoftConcurrentCache();
-    static final Map<Class<?>, SoftReference<List<Method>>> reflectGetterCache = buildSoftConcurrentCache();
-    static final Map<Class<?>, Class<?>> reflectInterfaceCache = buildSoftConcurrentCache();
-    static final Map<Class<?>, Function<Object, Object>> staticMapping = buildSoftConcurrentCache();
-    static final Map<Predicate<Object>, Function<Object, Object>> predicateMapping = buildSoftConcurrentCache();
+    static final Cache<Class<?>, Method[]> reflectMethodsCache = Cache.build(null, true);
+    static final Cache<Class<?>, List<Method>> reflectGetterCache = Cache.build(null, true);
+    static final Cache<Class<?>, Class<?>> reflectInterfaceCache = Cache.build(null, true);
+    static final Cache<Class<?>, Function<Object, Object>> staticMapping = Cache.build(null, true);
+    static final Cache<Predicate<Object>, Function<Object, Object>> predicateMapping = Cache.build(null, true);
 }

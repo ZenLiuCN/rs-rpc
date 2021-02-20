@@ -2,6 +2,7 @@ package cn.zenliu.java.rs.rpc.core.context;
 
 import cn.zenliu.java.rs.rpc.api.Result;
 import cn.zenliu.java.rs.rpc.core.element.UniqueList;
+import mimic.Cache;
 import org.jetbrains.annotations.Nullable;
 import reactor.core.publisher.Flux;
 
@@ -15,9 +16,9 @@ import java.util.function.Function;
  * @since 2021-01-23
  */
 public interface ContextServices extends Context {
-    Map<Class<?>, WeakReference<Object>> getServices();
+    Cache<Class<?>, Object> getServices();
 
-    Map<Class<?>, WeakReference<Object>> getProxies();
+    Cache<Class<?>, Object> getProxies();
 
     Map<Integer, Function<Object[], Result<Object>>> getHandlers();
 
@@ -61,12 +62,8 @@ public interface ContextServices extends Context {
 
     default Set<String> getServiceName(UniqueList other) {
         Set<String> service = new HashSet<>();
-        for (Map.Entry<Class<?>, WeakReference<Object>> entry : getServices().entrySet()) {
-            if (entry.getValue().get() != null) {
-                service.add(entry.getKey().getCanonicalName());
-            } else {
-                getServices().remove(entry.getKey());
-            }
+        for (Class<?> entry : getServices().getKeys()) {
+            service.add(entry.getCanonicalName());
         }
         if (other != null) other.withRouteMark(service::add, service);
         return service;
@@ -74,8 +71,7 @@ public interface ContextServices extends Context {
 
     default List<String> getProxiesList() {
         List<String> list = new ArrayList<>();
-        for (WeakReference<Object> x : getProxies().values()) {
-            Object o = x.get();
+        for (Object o : getProxies().getValues()) {
             if (o != null) {
                 list.add(o.toString());
             }
@@ -84,12 +80,11 @@ public interface ContextServices extends Context {
     }
 
     default Object addProxy(Class<?> type, Object instance) {
-        return getProxies().put(type, new WeakReference<>(instance));
+        return getProxies().put(type, instance);
     }
 
     default Object validateProxy(Class<?> type) {
-        final WeakReference<Object> ref = getProxies().get(type);
-        return ref == null ? null : ref.get();
+        return getProxies().get(type);
     }
 
     default @Nullable Function<Object[], Result<Object>> findHandler(String sign) {
