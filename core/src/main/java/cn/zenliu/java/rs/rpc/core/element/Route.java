@@ -5,6 +5,7 @@ import lombok.Getter;
 import lombok.NonNull;
 import org.jooq.lambda.Seq;
 
+import java.util.Arrays;
 import java.util.Objects;
 
 /**
@@ -27,6 +28,8 @@ public interface Route {
 
     String toRoute();
 
+    Route append(String scopeName);
+
     static Route fromRoute(String route) {
         if (route == null || route.isEmpty() || !route.contains(ROUTE_DIVIDER + "") || !route.contains(SERVICE_DIVIDER + ""))
             throw new IllegalArgumentException("route '" + route + "' is invalid .");
@@ -45,9 +48,9 @@ public interface Route {
     @Getter
     @AllArgsConstructor(staticName = "of")
     final class RouteImpl implements Route {
-        @NonNull() final String service;
-        @NonNull() final String method;
-        @NonNull() final String[] routing;
+        @NonNull final String service;
+        @NonNull final String method;
+        @NonNull final String[] routing;
 
         @Override
         public String getAddress() {
@@ -87,6 +90,13 @@ public interface Route {
             int result = Objects.hash(getService(), getMethod());
             result = 31 * result;
             return result;
+        }
+
+        @Override
+        public Route append(String scopeName) {
+            final String[] newRouting = Arrays.copyOf(routing, routing.length + 1);
+            newRouting[newRouting.length - 1] = scopeName;
+            return RouteImpl.of(service, method, newRouting);
         }
     }
 }

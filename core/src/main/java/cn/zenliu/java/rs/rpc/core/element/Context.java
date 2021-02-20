@@ -7,7 +7,9 @@ import java.util.function.Supplier;
  * @apiNote
  * @since 2021-02-20
  */
-public interface Logger {
+public interface Context {
+    String getName();
+
     void onDebug(String template, Object... args);
 
     void onDebug(String template, Supplier<Object[]> args);
