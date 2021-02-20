@@ -4,10 +4,15 @@ import cn.zenliu.java.mimic.api.MimicApi;
 import cn.zenliu.java.rs.rpc.api.JvmUnique;
 import cn.zenliu.java.rs.rpc.api.Scope;
 import cn.zenliu.java.rs.rpc.core.impl.ScopeImpl;
+import mimic.Cache;
 import mimic.MimicLight;
 import mimic.MimicUtil;
 import org.jetbrains.annotations.NotNull;
+import reactor.core.Disposable;
+import reactor.core.publisher.Flux;
+import reactor.core.scheduler.Schedulers;
 
+import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -91,6 +96,24 @@ public interface Rpc {
     }
 
     final class internal {
+        static {
+            //auto update cache pool 10 minute
+            final Disposable disposable = Flux.interval(Duration.ofMinutes(10))
+                .publishOn(Schedulers.boundedElastic())
+                .subscribe(x -> {
+                    Cache.purifyAll();
+                });
+            final Disposable ttLDisposable = Flux.interval(Duration.ofSeconds(1))
+                .publishOn(Schedulers.boundedElastic())
+                .subscribe(x -> {
+                    Cache.purifyTTL();
+                });
+            Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+                disposable.dispose();
+                ttLDisposable.dispose();
+            }));
+        }
+
         static boolean nothing() {
             scopes.put(Global.getName(), Global);
             return true;

@@ -4,6 +4,7 @@ import cn.zenliu.java.rs.rpc.core.element.Remote;
 import cn.zenliu.java.rs.rpc.core.element.RouteMeta;
 import cn.zenliu.java.rs.rpc.core.element.Server;
 import cn.zenliu.java.rs.rpc.core.util.PayloadUtil;
+import cn.zenliu.java.rs.rpc.core.util.RemoteObserverUtil;
 import io.rsocket.RSocket;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
@@ -89,11 +90,13 @@ public final class RemoteImpl implements Remote {
 
     public Remote plusWeight() {
         weight++;
+        RemoteObserverUtil.updateWeight(this);
         return this;
     }
 
     public Remote minusWeight() {
         weight--;
+        RemoteObserverUtil.updateWeight(this);
         return this;
     }
 

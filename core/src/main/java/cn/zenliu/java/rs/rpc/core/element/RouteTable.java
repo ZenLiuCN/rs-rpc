@@ -1,13 +1,19 @@
 package cn.zenliu.java.rs.rpc.core.element;
 
-import lombok.AllArgsConstructor;
+import cn.zenliu.java.rs.rpc.core.util.RemoteObserverUtil;
 import mimic.Cache;
 import org.jetbrains.annotations.Nullable;
+import org.jooq.lambda.tuple.Tuple;
+import org.jooq.lambda.tuple.Tuple2;
 
 import java.lang.ref.WeakReference;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListSet;
+import java.util.function.Function;
 
 /**
  * manage all services (local and remote)
@@ -32,21 +38,82 @@ public interface RouteTable {
 
     void addMethod(String address, ServiceMethod method);
 
-    @AllArgsConstructor(staticName = "of")
+    final class WeightedRemote {
+        final Remote remote;
+        final Integer jump;
+
+        WeightedRemote(Remote remote, Integer jump) {
+            this.remote = remote;
+            this.jump = jump;
+        }
+
+        WeightedRemote updateWeight(Integer jump) {
+            return new WeightedRemote(remote, jump);
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (!(o instanceof WeightedRemote)) return false;
+            WeightedRemote that = (WeightedRemote) o;
+            return remote.equals(that.remote);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(remote);
+        }
+    }
+
     final class RouteTableImpl implements RouteTable {
-        final Map<String, ConcurrentSkipListSet<Remote>> registry = new ConcurrentHashMap<>();
+        final Map<String, ConcurrentSkipListSet<WeightedRemote>> registry = new ConcurrentHashMap<>();
         final Map<String, ServiceMethod> methods = new ConcurrentHashMap<>();
         final Map<String, ServiceStreamMethod> streams = new ConcurrentHashMap<>();
         final Cache<Class<?>, Object> services = Cache.build(null, false);
         final Logger log;
 
-        static <T> T safeFirst(ConcurrentSkipListSet<T> list) {
-            return list == null || list.isEmpty() ? null : list.first();
+        private RouteTableImpl(Logger log) {
+            this.log = log;
+            RemoteObserverUtil.observer.asFlux().subscribe(e -> {
+                final List<Tuple2<WeightedRemote, ConcurrentSkipListSet<WeightedRemote>>> remotes = findRemote(e.v2);
+                if (remotes.isEmpty()) return;
+                switch (e.v1) {
+                    case WEIGHT_CHANGE:
+                        remotes.forEach(x -> {
+                            x.v2.remove(x.v1);
+                            x.v2.add(x.v1);
+                        });
+                        break;
+                    case REMOVED:
+                        remotes.forEach(x -> x.v2.remove(x.v1));
+                        break;
+                }
+            });
+        }
+
+        private List<Tuple2<WeightedRemote, ConcurrentSkipListSet<WeightedRemote>>> findRemote(Remote remote) {
+            List<Tuple2<WeightedRemote, ConcurrentSkipListSet<WeightedRemote>>> result = new ArrayList<>();
+            for (ConcurrentSkipListSet<WeightedRemote> value : registry.values()) {
+                for (WeightedRemote weightedRemote : value) {
+                    if (weightedRemote.remote.equals(remote)) {
+                        result.add(Tuple.tuple(weightedRemote, value));
+                    }
+                }
+            }
+            return result;
+        }
+
+        static <T, R> R safeFirst(ConcurrentSkipListSet<T> list, Function<T, R> notNull) {
+            return list == null || list.isEmpty() ? null : notNull.apply(list.first());
+        }
+
+        public static RouteTableImpl of(Logger log) {
+            return new RouteTableImpl(log);
         }
 
         @Override
         public @Nullable Remote findRoute(String address) {
-            return safeFirst(registry.get(address));
+            return safeFirst(registry.get(address), x -> x.remote);
         }
 
         @Override
@@ -61,7 +128,8 @@ public interface RouteTable {
 
         @Override
         public RouteTable addRoute(RouteMeta meta, Remote remote) {
-            return null;
+            //TODO impl
+            return this;
         }
 
         @Override

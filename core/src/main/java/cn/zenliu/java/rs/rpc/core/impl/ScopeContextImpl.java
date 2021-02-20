@@ -15,7 +15,6 @@ import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
-import reactor.core.scheduler.Schedulers;
 
 import java.time.Duration;
 import java.util.HashSet;
@@ -51,15 +50,6 @@ public abstract class ScopeContextImpl implements ContextScope, ContextServers, 
      */
     @Getter final boolean route;
 
-    static {
-        //auto update cache pool 10 minute
-        final Disposable disposable = Flux.interval(Duration.ofMinutes(10))
-            .publishOn(Schedulers.boundedElastic())
-            .subscribe(x -> {
-                Cache.purifyAll();
-            });
-        Runtime.getRuntime().addShutdownHook(new Thread(disposable::dispose));
-    }
 
     protected ScopeContextImpl(String name, boolean route) {
         this.name = name;
